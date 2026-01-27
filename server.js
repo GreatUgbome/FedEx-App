@@ -71,8 +71,9 @@ const sendVerificationEmail = async (email, name, verificationLink) => {
     `;
 
     try {
+        const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@fedexapp.com';
         await transporter.sendMail({
-            from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+            from: fromEmail,
             to: email,
             subject: '✉️ Verify Your FedEx Account',
             html: htmlContent,
@@ -87,7 +88,7 @@ const sendVerificationEmail = async (email, name, verificationLink) => {
 
 // Middleware
 app.use(cors({
-    origin: ['http://localhost:3000', 'http://localhost:8080', 'http://localhost', 'https://localhost'],
+    origin: ['http://localhost:3000', 'http://localhost:8080', 'http://localhost', 'https://localhost', 'https://fedex-app-production.up.railway.app', 'https://x5vk3w28.up.railway.app'],
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']

@@ -1368,18 +1368,31 @@
 
         window.handleSignup = async (e) => {
             e.preventDefault();
-            const name = document.getElementById('signupName').value;
-            const email = document.getElementById('signupEmail').value;
-            const phone = document.getElementById('signupPhone').value;
+            const name = document.getElementById('signupName').value.trim();
+            const email = document.getElementById('signupEmail').value.trim().toLowerCase();
+            const phone = document.getElementById('signupPhone').value.trim();
             const password = document.getElementById('signupPassword').value;
             const passwordConfirm = document.getElementById('signupPasswordConfirm').value;
 
-            if (password !== passwordConfirm) {
-                return window.showToast("Passwords don't match", "error");
+            // Validation
+            if (!name) {
+                return window.showToast("Please enter your full name", "error");
+            }
+
+            if (!email || !email.includes('@')) {
+                return window.showToast("Please enter a valid email address", "error");
+            }
+
+            if (!password) {
+                return window.showToast("Please enter a password", "error");
             }
 
             if (password.length < 6) {
                 return window.showToast("Password must be at least 6 characters", "error");
+            }
+
+            if (password !== passwordConfirm) {
+                return window.showToast("Passwords don't match", "error");
             }
 
             try {
@@ -1453,11 +1466,12 @@
             }, 1000);
         };
 
-        window.handleLogin = (e) => {
+        window.handleLogin = async (e) => {
             e.preventDefault();
             const email = document.getElementById('loginEmail').value;
             const pass = document.getElementById('loginPassword').value;
 
+            // Check hardcoded admin first
             if (email === 'Admin' && pass === 'Admin123') {
                 document.getElementById('authButtons').classList.add('hidden');
                 document.getElementById('mobileAuthLinks').classList.add('hidden');
@@ -1475,10 +1489,40 @@
                     window.logActivity("Admin logged in");
                     window.switchAdminView('shipments');
                 }, 500);
-            } else if (window.maintenanceMode) {
-                window.showToast("Maintenance Mode Active. Admin access only.", "error");
-            } else {
-                window.showToast("Invalid credentials. Try Admin / Admin123", "error");
+                return;
+            }
+            
+            if (window.maintenanceMode) {
+                return window.showToast("Maintenance Mode Active. Admin access only.", "error");
+            }
+
+            // Try API login for registered users
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password: pass })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.user) {
+                    // Successful login
+                    window.currentUser = data.user;
+                    document.getElementById('authButtons').classList.add('hidden');
+                    document.getElementById('mobileAuthLinks').classList.add('hidden');
+                    document.getElementById('userAccount').classList.remove('hidden');
+                    document.getElementById('userAccount').classList.add('flex');
+                    document.getElementById('userNameDisplay').textContent = data.user.name || data.user.email;
+                    
+                    window.closeModal('loginModal');
+                    window.showToast(`✅ Welcome, ${data.user.name || 'User'}!`, "success");
+                } else {
+                    window.showToast(data.error || "Invalid email or password", "error");
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                window.showToast("Connection error. Check console.", "error");
             }
         };
 
@@ -2073,6 +2117,12 @@
             globalThis.toggleQuickActions = window.toggleQuickActions;
             globalThis.toggleMobileMenu = window.toggleMobileMenu;
             globalThis.initSignaturePad = window.initSignaturePad;
+            // Auth functions
+            globalThis.handleLogin = window.handleLogin;
+            globalThis.handleSignup = window.handleSignup;
+            globalThis.handleVerify = window.handleVerify;
+            globalThis.switchAuthTab = window.switchAuthTab;
+            globalThis.copyTrackingLink = window.copyTrackingLink;
             console.log('✅ All global functions exposed');
         };
         
