@@ -1438,6 +1438,9 @@
             window.addNotification(originalId ? `Shipment ${newId} updated` : `New shipment ${newId} created`);
             window.closeModal('adminEditModal');
             
+            // Refresh admin UI to show updated data
+            await refreshAdminUI();
+            
             if (oldStatus && oldStatus !== newStatus && customerEmail) {
                 window.sendEmailUpdate(newId, newStatus, customerEmail);
             }
@@ -1565,20 +1568,40 @@
             });
         }
 
-        function refreshAdminUI() {
-            // Manually re-read local storage and render active view
-            const view = document.querySelector('.sidebar-item.active').id;
+        async function refreshAdminUI() {
+            // Fetch fresh data from MongoDB via Adapter
+            const view = document.querySelector('.sidebar-item.active')?.id;
+            
             if(view === 'nav-shipments') {
-                const dbLocal = loadLocal('fedex_db', DEFAULT_DB);
-                const list = Object.keys(dbLocal).map(k => ({id: k, ...dbLocal[k]}));
-                window.adminShipmentData = list;
-                window.filterShipments();
-                window.renderStatusChart();
-                window.renderActivityLog();
+                try {
+                    // Fetch from MongoDB through adapter
+                    const list = await Adapter.getAllShipments() || [];
+                    window.adminShipmentData = list;
+                    window.filterShipments();
+                    window.renderStatusChart();
+                    window.renderActivityLog();
+                } catch (error) {
+                    console.error('Error fetching shipments:', error);
+                    // Fallback to localStorage
+                    const dbLocal = loadLocal('fedex_db', DEFAULT_DB);
+                    const list = Object.keys(dbLocal).map(k => ({id: k, ...dbLocal[k]}));
+                    window.adminShipmentData = list;
+                    window.filterShipments();
+                }
             } else if (view === 'nav-users') {
-                renderUserTable(loadLocal('fedex_users', DEFAULT_USERS));
+                try {
+                    const users = await Adapter.getAllUsers() || loadLocal('fedex_users', DEFAULT_USERS);
+                    renderUserTable(users);
+                } catch (error) {
+                    renderUserTable(loadLocal('fedex_users', DEFAULT_USERS));
+                }
             } else if (view === 'nav-locations') {
-                renderLocTable(loadLocal('fedex_locations', DEFAULT_LOCATIONS));
+                try {
+                    const locs = await Adapter.getAllLocations() || loadLocal('fedex_locations', DEFAULT_LOCATIONS);
+                    renderLocTable(locs);
+                } catch (error) {
+                    renderLocTable(loadLocal('fedex_locations', DEFAULT_LOCATIONS));
+                }
             }
         }
 
