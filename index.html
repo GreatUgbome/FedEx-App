@@ -985,75 +985,17 @@
     </footer>
 
     <script type="module">
+        // FIREBASE DISABLED - using MongoDB adapter instead
+        /*
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, query } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        */
 
-        // --- FIREBASE CONFIGURATION (UPDATED) ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyDKJ1lwRWQC3eHyWYbrx3WpdXCrnKT1yGs",
-            authDomain: "fedex-37e89.firebaseapp.com",
-            projectId: "fedex-37e89",
-            storageBucket: "fedex-37e89.firebasestorage.app",
-            messagingSenderId: "404051824308",
-            appId: "1:404051824308:web:13c12e1d7302993648d1e1",
-            measurementId: "G-7PWE0EMDVH"
-        };
-
-        // --- HYBRID MODE SYSTEM ---
+        // --- MONGODB ADAPTER MODE ONLY ---
         let db = null;
         let auth = null;
-        let isFirebaseReady = false;
-
-        // Check if config has been updated from default placeholders
-        const isConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY" && !firebaseConfig.apiKey.includes("YOUR");
-
-        if (isConfigured) {
-            try {
-                const app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-                signInAnonymously(auth).then(() => {
-                    console.log("Connected to Firebase");
-                    document.getElementById('dbStatus').textContent = "Cloud Connected";
-                    document.getElementById('dbStatus').classList.remove('text-yellow-600');
-                    document.getElementById('dbStatus').classList.add('text-green-600');
-                    document.getElementById('shipmentSubText').textContent = "Live data from Firebase Cloud.";
-                    document.getElementById('dashboardHealthIndicator').className = "ml-3 text-xs font-normal px-2 py-1 rounded-full bg-green-100 text-green-800 flex items-center border border-green-200";
-                    document.getElementById('dashboardHealthIndicator').innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> System Online';
-                    isFirebaseReady = true;
-                    setupRealtimeListeners();
-                }).catch((error) => {
-                    console.warn("Firebase Auth Failed:", error.code);
-                    let msg = "Cloud connection failed. Using Offline Mode.";
-                    if (error.code === 'auth/admin-restricted-operation' || error.code === 'auth/operation-not-allowed') {
-                        msg = "Enable 'Anonymous' in Firebase Console > Authentication.";
-                    }
-                    window.showToast(msg, "error");
-                    enableLocalStorageMode();
-                });
-            } catch (e) {
-                console.error("Firebase Init Error:", e);
-                enableLocalStorageMode();
-            }
-        } else {
-            // Immediately fallback if keys aren't set
-            enableLocalStorageMode();
-        }
-
-        function enableLocalStorageMode() {
-            console.log("Falling back to Local Storage");
-            isFirebaseReady = false;
-            document.getElementById('dbStatus').textContent = "Local Mode";
-            document.getElementById('shipmentSubText').textContent = "Local Storage (Demo Mode)";
-            document.getElementById('dashboardHealthIndicator').className = "ml-3 text-xs font-normal px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 flex items-center border border-yellow-200";
-            document.getElementById('dashboardHealthIndicator').innerHTML = '<span class="w-2 h-2 rounded-full bg-yellow-500 mr-2 animate-pulse"></span> Local Mode';
-            
-            // Show toast on load
-            setTimeout(() => {
-                window.showToast("Local Mode Active. Data saved to browser.", "info");
-            }, 1000);
-        }
+        let isFirebaseReady = false; // Firebase disabled, using MongoDB instead
 
         // --- MOCK DATA (For Local Storage) ---
         const DEFAULT_DB = {
@@ -1077,57 +1019,70 @@
         // These functions decide whether to use Firebase or LocalStorage
         
         const Adapter = {
-            async getShipment(id) {
-                if(isFirebaseReady) {
-                    const snap = await getDoc(doc(db, "shipments", id));
-                    return snap.exists() ? snap.data() : null;
-                } else {
-                    const localDB = loadLocal('fedex_db', DEFAULT_DB);
-                    return localDB[id] || null;
+            // MongoDB Adapter Integration
+            async getAllShipments() {
+                // Use MongoDB adapter to fetch all shipments from backend
+                if (window.dbAdapter && window.dbAdapter.getAllShipments) {
+                    return await window.dbAdapter.getAllShipments();
                 }
+                // Fallback to localStorage if adapter not ready
+                const localDB = loadLocal('fedex_db', DEFAULT_DB);
+                return Object.keys(localDB).map(k => ({id: k, ...localDB[k]}));
+            },
+            async getAllUsers() {
+                if (window.dbAdapter && window.dbAdapter.getAllUsers) {
+                    return await window.dbAdapter.getAllUsers();
+                }
+                return loadLocal('fedex_users', DEFAULT_USERS);
+            },
+            async getAllLocations() {
+                if (window.dbAdapter && window.dbAdapter.getAllLocations) {
+                    return await window.dbAdapter.getAllLocations();
+                }
+                return loadLocal('fedex_locations', DEFAULT_LOCATIONS);
+            },
+            async getShipment(id) {
+                if (window.dbAdapter && window.dbAdapter.getShipment) {
+                    return await window.dbAdapter.getShipment(id);
+                }
+                const localDB = loadLocal('fedex_db', DEFAULT_DB);
+                return localDB[id] || null;
             },
             async saveShipment(id, data) {
-                if(isFirebaseReady) {
-                    await setDoc(doc(db, "shipments", id), data, { merge: true });
-                } else {
-                    const localDB = loadLocal('fedex_db', DEFAULT_DB);
-                    localDB[id] = { ...localDB[id], ...data };
-                    saveLocal('fedex_db', localDB);
-                    refreshAdminUI(); // Manual refresh for local mode
+                if (window.dbAdapter && window.dbAdapter.saveShipment) {
+                    return await window.dbAdapter.saveShipment(id, data);
                 }
+                const localDB = loadLocal('fedex_db', DEFAULT_DB);
+                localDB[id] = { ...localDB[id], ...data };
+                saveLocal('fedex_db', localDB);
+                refreshAdminUI();
             },
             async deleteShipment(id) {
-                if(isFirebaseReady) {
-                    await deleteDoc(doc(db, "shipments", id));
-                } else {
-                    const localDB = loadLocal('fedex_db', DEFAULT_DB);
-                    delete localDB[id];
-                    saveLocal('fedex_db', localDB);
-                    refreshAdminUI();
+                if (window.dbAdapter && window.dbAdapter.deleteShipment) {
+                    return await window.dbAdapter.deleteShipment(id);
                 }
+                const localDB = loadLocal('fedex_db', DEFAULT_DB);
+                delete localDB[id];
+                saveLocal('fedex_db', localDB);
+                refreshAdminUI();
             },
             async deleteAllShipments() {
-                if(isFirebaseReady) {
-                    const list = window.adminShipmentData || [];
-                    const promises = list.map(item => deleteDoc(doc(db, "shipments", item.id)));
-                    await Promise.all(promises);
-                } else {
-                    saveLocal('fedex_db', {});
-                    refreshAdminUI();
+                if (window.dbAdapter && window.dbAdapter.deleteAllShipments) {
+                    return await window.dbAdapter.deleteAllShipments();
                 }
+                saveLocal('fedex_db', {});
+                refreshAdminUI();
             },
             async deleteSelectedShipments(ids) {
-                if(isFirebaseReady) {
-                    const promises = ids.map(id => deleteDoc(doc(db, "shipments", id)));
-                    await Promise.all(promises);
-                } else {
-                    const localDB = loadLocal('fedex_db', DEFAULT_DB);
-                    ids.forEach(id => delete localDB[id]);
-                    saveLocal('fedex_db', localDB);
-                    refreshAdminUI();
+                if (window.dbAdapter && window.dbAdapter.deleteSelectedShipments) {
+                    return await window.dbAdapter.deleteSelectedShipments(ids);
                 }
+                const localDB = loadLocal('fedex_db', DEFAULT_DB);
+                ids.forEach(id => delete localDB[id]);
+                saveLocal('fedex_db', localDB);
+                refreshAdminUI();
             },
-             async duplicateShipment(id) {
+            async duplicateShipment(id) {
                 const shipmentData = await Adapter.getShipment(id);
                 if (shipmentData) {
                     let newId;
@@ -1167,41 +1122,45 @@
             },
             // Users
             async getUsers() {
-                if(isFirebaseReady) { return []; /* handled by listener */ } 
-                else { return loadLocal('fedex_users', DEFAULT_USERS); }
+                if (window.dbAdapter && window.dbAdapter.getAllUsers) {
+                    return await window.dbAdapter.getAllUsers();
+                }
+                return loadLocal('fedex_users', DEFAULT_USERS);
             },
             async saveUser(data) {
-                if(isFirebaseReady) { await setDoc(doc(db, "users", data.id), data); }
-                else {
-                    const users = loadLocal('fedex_users', DEFAULT_USERS);
-                    const idx = users.findIndex(u => u.id === data.id);
-                    if(idx >= 0) users[idx] = data; else users.push(data);
-                    saveLocal('fedex_users', users);
-                    refreshAdminUI();
+                if (window.dbAdapter && window.dbAdapter.saveUser) {
+                    return await window.dbAdapter.saveUser(data);
                 }
+                const users = loadLocal('fedex_users', DEFAULT_USERS);
+                const idx = users.findIndex(u => u.id === data.id);
+                if(idx >= 0) users[idx] = data; else users.push(data);
+                saveLocal('fedex_users', users);
+                refreshAdminUI();
             },
             async deleteUser(id) {
-                if(isFirebaseReady) { await deleteDoc(doc(db, "users", id)); }
-                else {
-                    const users = loadLocal('fedex_users', DEFAULT_USERS).filter(u => u.id !== id);
-                    saveLocal('fedex_users', users);
-                    refreshAdminUI();
+                if (window.dbAdapter && window.dbAdapter.deleteUser) {
+                    return await window.dbAdapter.deleteUser(id);
                 }
+                const users = loadLocal('fedex_users', DEFAULT_USERS).filter(u => u.id !== id);
+                saveLocal('fedex_users', users);
+                refreshAdminUI();
             },
             // Locations
             async getLocations() {
-                if(isFirebaseReady) { return []; /* handled by listener */ }
-                else { return loadLocal('fedex_locations', DEFAULT_LOCATIONS); }
+                if (window.dbAdapter && window.dbAdapter.getAllLocations) {
+                    return await window.dbAdapter.getAllLocations();
+                }
+                return loadLocal('fedex_locations', DEFAULT_LOCATIONS);
             },
             async saveLocation(data) {
-                if(isFirebaseReady) { await setDoc(doc(db, "locations", data.id), data); }
-                else {
-                    const locs = loadLocal('fedex_locations', DEFAULT_LOCATIONS);
-                    const idx = locs.findIndex(l => l.id === data.id);
-                    if(idx >= 0) locs[idx] = data; else locs.push(data);
-                    saveLocal('fedex_locations', locs);
-                    refreshAdminUI();
+                if (window.dbAdapter && window.dbAdapter.saveLocation) {
+                    return await window.dbAdapter.saveLocation(data);
                 }
+                const locs = loadLocal('fedex_locations', DEFAULT_LOCATIONS);
+                const idx = locs.findIndex(l => l.id === data.id);
+                if(idx >= 0) locs[idx] = data; else locs.push(data);
+                saveLocal('fedex_locations', locs);
+                refreshAdminUI();
             }
         };
 
