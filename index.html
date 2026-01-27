@@ -96,7 +96,7 @@
                             <input type="password" id="loginPassword" class="w-full border border-gray-300 p-2 rounded focus:outline-none focus:border-fedex-purple" placeholder="••••••" required>
                         </div>
                         <button type="submit" class="w-full bg-fedex-orange text-white font-bold py-2 rounded hover:bg-orange-600 transition">Log In</button>
-                        <p class="text-xs text-center text-gray-500 mt-4">Demo: <strong>Admin</strong> / <strong>Admin123</strong> for admin access</p>
+                        <p class="text-xs text-center text-gray-500 mt-4">Demo: <strong>admin@fedex.com</strong> / <strong>Admin123</strong> for admin access</p>
                     </form>
                 </div>
 
@@ -1472,7 +1472,7 @@
             const pass = document.getElementById('loginPassword').value;
 
             // Check hardcoded admin first
-            if (email === 'Admin' && pass === 'Admin123') {
+            if (email === 'admin@fedex.com' && pass === 'Admin123') {
                 document.getElementById('authButtons').classList.add('hidden');
                 document.getElementById('mobileAuthLinks').classList.add('hidden');
                 document.getElementById('userAccount').classList.remove('hidden');
