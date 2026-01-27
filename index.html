@@ -438,6 +438,7 @@
                 <div class="mt-2">
                     <h4 class="text-xs font-bold text-gray-500 uppercase mb-1">Travel History Log</h4>
                     <div id="editHistoryList" class="bg-gray-50 border border-gray-200 rounded max-h-40 overflow-y-auto text-sm custom-scrollbar"></div>
+                    <button onclick="window.openEditHistoryModal()" class="text-xs text-blue-600 hover:underline mt-2"><i class="fas fa-clock mr-1"></i> Edit Timestamp</button>
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Delivery Text</label>
@@ -671,6 +672,50 @@
             </div>
         </div>
     </div>
+
+    <!-- Edit History Timestamp Modal -->
+    <div id="editHistoryModal" class="hidden fixed inset-0 z-[65] modal-overlay flex justify-center items-center px-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden slide-down">
+            <div class="bg-fedex-purple p-3 text-white font-bold flex justify-between">
+                <span>Edit History Timestamp</span>
+                <button onclick="closeModal('editHistoryModal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="bg-blue-50 border border-blue-200 p-3 rounded text-sm text-blue-800">
+                    <i class="fas fa-info-circle mr-2"></i> Edit the date and time for this tracking event
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Select Event</label>
+                    <select id="historyEventSelect" onchange="window.loadHistoryEventDetails()" class="w-full border p-2 rounded text-sm focus:border-fedex-purple outline-none">
+                        <option value="">-- Select an event --</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Date</label>
+                        <input type="date" id="editEventDate" class="w-full border p-2 rounded text-sm focus:border-fedex-purple outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Time</label>
+                        <input type="time" id="editEventTime" class="w-full border p-2 rounded text-sm focus:border-fedex-purple outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Location</label>
+                    <input type="text" id="editEventLocation" class="w-full border p-2 rounded text-sm focus:border-fedex-purple outline-none" placeholder="e.g., Memphis, TN">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Message</label>
+                    <input type="text" id="editEventMessage" class="w-full border p-2 rounded text-sm focus:border-fedex-purple outline-none" placeholder="e.g., Arrived at facility">
+                </div>
+                <div class="flex justify-end space-x-2 pt-4 border-t">
+                    <button onclick="closeModal('editHistoryModal')" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+                    <button onclick="window.saveHistoryTimestamp()" class="px-4 py-2 bg-fedex-orange text-white rounded hover:bg-orange-600 font-bold">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="liveChatWidget" class="fixed bottom-5 right-5 z-[80] flex flex-col items-end">
         <!-- Chat Box -->
         <div id="chatBox" class="hidden bg-white w-80 h-96 rounded-lg shadow-2xl border border-gray-200 flex flex-col mb-4 slide-down overflow-hidden">
@@ -2277,40 +2322,198 @@
                 const data = await Adapter.getShipment(id);
                 if(!data) return window.showToast("Error loading data", "error");
 
-                doc.setFontSize(20);
-                doc.text("Shipment Receipt", 105, 20, { align: "center" });
-                
-                doc.setFontSize(12);
-                doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, 40);
-                doc.text(`Tracking ID: ${id}`, 20, 50);
-                
-                doc.setLineWidth(0.5);
-                doc.line(20, 55, 190, 55);
-                
-                doc.text("Sender:", 20, 70);
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+                let yPos = 10;
+
+                // Header Background
+                doc.setFillColor(77, 20, 140); // FedEx Purple
+                doc.rect(0, 0, pageWidth, 35, 'F');
+
+                // Company Name and Receipt Title
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(28);
                 doc.setFont("helvetica", "bold");
-                doc.text(data.sender?.name || "N/A", 20, 80);
-                doc.setFont("helvetica", "normal");
-                doc.text(data.sender?.addr || "N/A", 20, 90);
+                doc.text("FedEx", 15, 20);
                 
-                doc.text("Recipient:", 110, 70);
-                doc.setFont("helvetica", "bold");
-                doc.text(data.recipient?.name || "N/A", 110, 80);
-                doc.setFont("helvetica", "normal");
-                doc.text(data.recipient?.addr || "N/A", 110, 90);
-                
-                doc.line(20, 100, 190, 100);
-                
-                doc.text("Shipment Details:", 20, 115);
-                doc.text(`Service: ${data.service}`, 20, 125);
-                doc.text(`Weight: ${data.weight}`, 20, 135);
-                doc.text(`Pieces: ${data.pieces}`, 20, 145);
-                
+                doc.setTextColor(255, 152, 0); // FedEx Orange
                 doc.setFontSize(10);
-                doc.text("Thank you for shipping with FedEx.", 105, 180, { align: "center" });
+                doc.setFont("helvetica", "normal");
+                doc.text("SHIPMENT RECEIPT", pageWidth - 40, 18);
                 
+                doc.setTextColor(200, 200, 200);
+                doc.setFontSize(8);
+                doc.text(`Receipt #: RCP-${id.substring(0, 8)}`, pageWidth - 40, 25);
+
+                // Reset text color to black for body
+                doc.setTextColor(0, 0, 0);
+                yPos = 45;
+
+                // Receipt Date Section
+                doc.setFontSize(9);
+                doc.setFont("helvetica", "bold");
+                doc.text("RECEIPT DATE & TIME", 15, yPos);
+                doc.setFont("helvetica", "normal");
+                yPos += 5;
+                const now = new Date();
+                doc.setFontSize(10);
+                doc.text(`${now.toLocaleDateString()} at ${now.toLocaleTimeString()}`, 15, yPos);
+                yPos += 10;
+
+                // Separator line
+                doc.setDrawColor(77, 20, 140);
+                doc.setLineWidth(0.5);
+                doc.line(15, yPos, pageWidth - 15, yPos);
+                yPos += 6;
+
+                // Tracking Information Header
+                doc.setFillColor(240, 240, 240);
+                doc.rect(15, yPos - 4, pageWidth - 30, 8, 'F');
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "bold");
+                doc.text("TRACKING INFORMATION", 15, yPos + 2);
+                yPos += 10;
+
+                // Tracking ID with highlight
+                doc.setFontSize(9);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(77, 20, 140);
+                doc.text("Tracking ID:", 15, yPos);
+                doc.setTextColor(0, 0, 0);
+                doc.setFont("helvetica", "normal");
+                doc.text(id, 50, yPos);
+                
+                // Status
+                yPos += 6;
+                doc.setFont("helvetica", "bold");
+                doc.text("Status:", 15, yPos);
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(34, 197, 94); // Green for status
+                doc.text(data.status || "Processing", 50, yPos);
+                doc.setTextColor(0, 0, 0);
+                
+                yPos += 8;
+
+                // Separator
+                doc.setDrawColor(200, 200, 200);
+                doc.setLineWidth(0.3);
+                doc.line(15, yPos, pageWidth - 15, yPos);
+                yPos += 6;
+
+                // Sender and Recipient Section
+                doc.setFontSize(10);
+                doc.setFont("helvetica", "bold");
+                doc.text("SENDER", 15, yPos);
+                
+                const recipientX = pageWidth / 2 + 5;
+                doc.text("RECIPIENT", recipientX, yPos);
+                yPos += 6;
+
+                // Sender Details
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.text(data.sender?.name || "N/A", 15, yPos);
+                doc.text(data.recipient?.name || "N/A", recipientX, yPos);
+                yPos += 6;
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(9);
+                const senderLines = (data.sender?.addr || "N/A").split('\n');
+                senderLines.forEach((line, idx) => {
+                    doc.text(line, 15, yPos + (idx * 4));
+                });
+                
+                const recipientLines = (data.recipient?.addr || "N/A").split('\n');
+                recipientLines.forEach((line, idx) => {
+                    doc.text(line, recipientX, yPos + (idx * 4));
+                });
+                yPos += Math.max(senderLines.length, recipientLines.length) * 4 + 2;
+
+                // Separator
+                doc.setDrawColor(200, 200, 200);
+                doc.line(15, yPos, pageWidth - 15, yPos);
+                yPos += 6;
+
+                // Shipment Details Header
+                doc.setFillColor(240, 240, 240);
+                doc.rect(15, yPos - 4, pageWidth - 30, 8, 'F');
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "bold");
+                doc.text("SHIPMENT DETAILS", 15, yPos + 2);
+                yPos += 10;
+
+                // Details Grid
+                doc.setFontSize(9);
+                const detailsData = [
+                    { label: "Service Type:", value: data.service || "N/A", x: 15 },
+                    { label: "Weight:", value: data.weight || "N/A", x: recipientX },
+                    { label: "Current Location:", value: data.location || "N/A", x: 15 },
+                    { label: "Pieces:", value: data.pieces || "1", x: recipientX },
+                    { label: "Dimensions:", value: data.dims || "N/A", x: 15 },
+                    { label: "Progress:", value: `${data.progress || 0}%`, x: recipientX },
+                ];
+
+                let rowStart = yPos;
+                detailsData.forEach((detail, idx) => {
+                    if (idx % 2 === 0 && idx > 0) rowStart += 7;
+                    const yCoord = rowStart + (Math.floor(idx / 2) * 7);
+                    
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(77, 20, 140);
+                    doc.text(detail.label, detail.x, yCoord);
+                    
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(0, 0, 0);
+                    doc.text(detail.value, detail.x + 45, yCoord);
+                });
+
+                yPos = rowStart + 15;
+
+                // Travel History Section if exists
+                if (data.history && data.history.length > 0) {
+                    doc.setDrawColor(200, 200, 200);
+                    doc.line(15, yPos, pageWidth - 15, yPos);
+                    yPos += 6;
+
+                    doc.setFillColor(240, 240, 240);
+                    doc.rect(15, yPos - 4, pageWidth - 30, 8, 'F');
+                    doc.setFontSize(11);
+                    doc.setFont("helvetica", "bold");
+                    doc.text("TRAVEL HISTORY", 15, yPos + 2);
+                    yPos += 8;
+
+                    doc.setFontSize(8);
+                    const historyLimit = Math.min(5, data.history.length);
+                    for (let i = 0; i < historyLimit; i++) {
+                        const hist = data.history[i];
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(77, 20, 140);
+                        doc.text(`${hist.date} ${hist.time}`, 15, yPos);
+                        
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(0, 0, 0);
+                        doc.text(`${hist.message} - ${hist.location}`, 50, yPos);
+                        yPos += 4;
+                    }
+                    yPos += 2;
+                }
+
+                // Footer Separator
+                doc.setDrawColor(77, 20, 140);
+                doc.setLineWidth(0.5);
+                doc.line(15, pageHeight - 25, pageWidth - 15, pageHeight - 25);
+
+                // Footer Information
+                doc.setFontSize(8);
+                doc.setTextColor(100, 100, 100);
+                doc.setFont("helvetica", "normal");
+                doc.text("Thank you for choosing FedEx for your shipping needs.", pageWidth / 2, pageHeight - 18, { align: "center" });
+                doc.text(`For tracking updates, visit: fedex.com/tracking/${id}`, pageWidth / 2, pageHeight - 14, { align: "center" });
+                doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, pageHeight - 10, { align: "center" });
+                doc.text("© 2024 FedEx Express International Limited. All rights reserved.", pageWidth / 2, pageHeight - 6, { align: "center" });
+
                 doc.save(`Receipt_${id}.pdf`);
-                window.showToast("Receipt downloaded.");
+                window.showToast("Professional receipt downloaded.");
             } catch (e) {
                 console.error(e);
                 window.showToast("Error generating receipt", "error");
@@ -2474,6 +2677,85 @@
                 window.renderEditHistory();
             }
 
+        };
+
+        // --- EDIT HISTORY TIMESTAMP FUNCTIONS ---
+        window.openEditHistoryModal = () => {
+            if (!window.currentShipmentHistory || window.currentShipmentHistory.length === 0) {
+                return window.showToast("No history to edit", "error");
+            }
+            
+            const select = document.getElementById('historyEventSelect');
+            select.innerHTML = '<option value="">-- Select an event --</option>';
+            
+            window.currentShipmentHistory.forEach((item, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `${item.message} - ${item.date} ${item.time}`;
+                select.appendChild(option);
+            });
+            
+            openModal('editHistoryModal');
+        };
+
+        window.loadHistoryEventDetails = () => {
+            const select = document.getElementById('historyEventSelect');
+            const index = select.value;
+            
+            if (index === '' || !window.currentShipmentHistory[index]) {
+                document.getElementById('editEventDate').value = '';
+                document.getElementById('editEventTime').value = '';
+                document.getElementById('editEventLocation').value = '';
+                document.getElementById('editEventMessage').value = '';
+                return;
+            }
+            
+            const event = window.currentShipmentHistory[index];
+            window.currentEditHistoryIndex = index;
+            
+            // Convert date format MM/DD/YYYY to YYYY-MM-DD for date input
+            const dateParts = event.date.split('/');
+            const isoDate = `${dateParts[2]}-${dateParts[0]}-${dateParts[1]}`;
+            
+            document.getElementById('editEventDate').value = isoDate;
+            document.getElementById('editEventTime').value = event.time || '';
+            document.getElementById('editEventLocation').value = event.location || '';
+            document.getElementById('editEventMessage').value = event.message || '';
+        };
+
+        window.saveHistoryTimestamp = () => {
+            const select = document.getElementById('historyEventSelect');
+            const index = window.currentEditHistoryIndex;
+            
+            if (index === undefined || !window.currentShipmentHistory[index]) {
+                return window.showToast("Please select an event first", "error");
+            }
+            
+            const date = document.getElementById('editEventDate').value;
+            const time = document.getElementById('editEventTime').value;
+            const location = document.getElementById('editEventLocation').value;
+            const message = document.getElementById('editEventMessage').value;
+            
+            if (!date || !time) {
+                return window.showToast("Date and Time are required", "error");
+            }
+            
+            // Convert YYYY-MM-DD to MM/DD/YYYY
+            const dateParts = date.split('-');
+            const formattedDate = `${dateParts[1]}/${dateParts[2]}/${dateParts[0]}`;
+            
+            // Update the history item
+            window.currentShipmentHistory[index] = {
+                ...window.currentShipmentHistory[index],
+                date: formattedDate,
+                time: time,
+                location: location || window.currentShipmentHistory[index].location,
+                message: message || window.currentShipmentHistory[index].message
+            };
+            
+            window.renderEditHistory();
+            closeModal('editHistoryModal');
+            window.showToast("Timestamp updated successfully", "success");
         };
 
         window.openUserModal = () => window.openModal('adminUserModal');
