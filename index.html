@@ -1682,7 +1682,14 @@
             window.showToast("User saved.");
         };
 
-        window.deleteUser = async (id) => { if(confirm("Delete user?")) await Adapter.deleteUser(id); };
+        window.deleteUser = async (id) => {
+            if(confirm("Delete user?")) {
+                await Adapter.deleteUser(id);
+                window.logActivity(`Deleted user ${id}`);
+                window.showToast("User deleted");
+                await window.refreshAdminUI();
+            }
+        };
 
         window.saveLocation = async () => {
             const id = document.getElementById('locIdInput').value || 'L'+Date.now();
@@ -1896,7 +1903,7 @@
             list.forEach(data => {
                 tbody.innerHTML += `<tr>
                     <td class="font-mono">${data.id}</td><td class="font-bold">${data.name}</td><td class="hidden sm:table-cell">${data.address}</td>
-                    <td>${data.type}</td><td class="text-right"><button onclick="window.deleteLocation()"><i class="fas fa-trash text-red-600"></i></button></td></tr>`;
+                    <td>${data.type}</td><td class="text-right"><button onclick="window.deleteLocation('${data.id}')"><i class="fas fa-trash text-red-600"></i></button></td></tr>`;
             });
         }
 
@@ -2091,9 +2098,13 @@
             globalThis.deleteShipment = window.deleteShipment;
             globalThis.deleteAllShipments = window.deleteAllShipments;
             globalThis.deleteSelectedShipments = window.deleteSelectedShipments;
+            globalThis.deleteUser = window.deleteUser;
+            globalThis.deleteLocation = window.deleteLocation;
             globalThis.saveShipment = window.saveShipment;
             globalThis.saveUser = window.saveUser;
             globalThis.saveLocation = window.saveLocation;
+            globalThis.renderUserTable = renderUserTable;
+            globalThis.renderLocTable = renderLocTable;
             globalThis.refreshAdminUI = window.refreshAdminUI;
             console.log('✅ All global functions exposed');
         };
@@ -2822,10 +2833,12 @@
             window.logActivity(`Maintenance Mode ${status}`);
         };
 
-        window.deleteLocation = (id) => {
+        window.deleteLocation = async (id) => {
             if (confirm("Delete location?")) {
-                Adapter.saveLocation = async (data) => { /* stub */ };
+                await Adapter.deleteLocation(id);
+                window.logActivity(`Deleted location ${id}`);
                 window.showToast("Location deleted");
+                await window.refreshAdminUI();
             }
         };
 
