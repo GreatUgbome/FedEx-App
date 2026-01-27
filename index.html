@@ -6,6 +6,12 @@
     <title>FedEx - Tracking, Shipping, and Locations</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Maps API: Replace YOUR_API_KEY with a valid key -->
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initMap"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --fedex-purple: #4D148C;
@@ -41,6 +47,20 @@
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+
+        /* Dark Mode Overrides for Admin Panel */
+        #adminPanelModal.dark { background-color: #111827; }
+        #adminPanelModal.dark .bg-white { background-color: #1f2937; color: #e5e7eb; border-color: #374151; }
+        #adminPanelModal.dark .bg-gray-50 { background-color: #111827; }
+        #adminPanelModal.dark .bg-gray-100 { background-color: #374151; border-color: #4b5563; }
+        #adminPanelModal.dark .text-gray-800, #adminPanelModal.dark .text-gray-700 { color: #f3f4f6; }
+        #adminPanelModal.dark .text-gray-600, #adminPanelModal.dark .text-gray-500 { color: #9ca3af; }
+        #adminPanelModal.dark .border-gray-200, #adminPanelModal.dark .border-gray-100 { border-color: #374151; }
+        #adminPanelModal.dark input, #adminPanelModal.dark select { background-color: #374151; border-color: #4b5563; color: white; }
+        #adminPanelModal.dark .admin-table th { background-color: #374151; color: #e5e7eb; border-bottom-color: #4b5563; }
+        #adminPanelModal.dark .admin-table td { border-top-color: #374151; }
+        #adminPanelModal.dark .admin-table tr:hover { background-color: #374151; }
+        #adminPanelModal.dark .sidebar-item:hover { background-color: #374151; }
     </style>
 </head>
 <body class="bg-gray-50 flex flex-col min-h-screen relative">
@@ -61,7 +81,10 @@
                         <input type="text" id="loginEmail" class="w-full border border-gray-300 p-2 rounded focus:outline-none focus:border-fedex-purple" placeholder="user@example.com" required>
                     </div>
                     <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="block text-gray-700 text-sm font-bold">Password</label>
+                            <a href="#" onclick="window.handlePasswordReset()" class="text-xs text-fedex-purple hover:underline">Forgot Password?</a>
+                        </div>
                         <input type="password" id="loginPassword" class="w-full border border-gray-300 p-2 rounded focus:outline-none focus:border-fedex-purple" placeholder="••••••" required>
                     </div>
                     <button type="submit" class="w-full bg-fedex-orange text-white font-bold py-2 rounded hover:bg-orange-600 transition">Log In</button>
@@ -81,7 +104,7 @@
             <div id="serviceModalContent" class="p-6"></div>
             <div class="bg-gray-50 p-4 border-t text-right">
                 <button onclick="closeModal('serviceModal')" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">Close</button>
-                <button onclick="window.simulateAction()" class="px-4 py-2 bg-fedex-purple text-white rounded hover:bg-purple-800 ml-2">Proceed</button>
+                <button id="serviceProceedBtn" onclick="window.simulateAction()" class="px-4 py-2 bg-fedex-purple text-white rounded hover:bg-purple-800 ml-2">Proceed</button>
             </div>
         </div>
     </div>
@@ -96,6 +119,44 @@
                     <h3 class="font-bold text-lg hidden md:block">Control Panel</h3>
                 </div>
                 <div class="flex items-center space-x-4">
+                    <div class="relative">
+                        <button onclick="window.toggleQuickActions()" class="bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold px-3 py-2 rounded transition flex items-center border border-gray-700">
+                            <i class="fas fa-bolt mr-1 text-yellow-400"></i> <span class="hidden md:inline">Quick Actions</span> <i class="fas fa-chevron-down ml-1 text-[10px]"></i>
+                        </button>
+                        <div id="quickActionsMenu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 text-gray-800 border border-gray-200 animate-fade-in">
+                            <a href="#" onclick="window.openEditModal(); window.toggleQuickActions()" class="block px-4 py-2 text-sm hover:bg-gray-100"><i class="fas fa-plus w-5 text-center text-gray-500"></i> New Shipment</a>
+                            <a href="#" onclick="window.openUserModal(); window.toggleQuickActions()" class="block px-4 py-2 text-sm hover:bg-gray-100"><i class="fas fa-user-plus w-5 text-center text-gray-500"></i> Add User</a>
+                            <a href="#" onclick="window.exportToCSV(); window.toggleQuickActions()" class="block px-4 py-2 text-sm hover:bg-gray-100"><i class="fas fa-file-csv w-5 text-center text-gray-500"></i> Export CSV</a>
+                            <div class="border-t border-gray-100 my-1"></div>
+                            <div class="px-4 py-2 text-sm flex items-center justify-between">
+                                <span class="text-gray-700"><i class="fas fa-tools w-5 text-center text-gray-500"></i> Maintenance</span>
+                                <button id="maintenanceToggleBtn" onclick="window.toggleMaintenanceMode()" class="w-8 h-4 bg-gray-300 rounded-full relative transition-colors duration-300 focus:outline-none">
+                                    <div id="maintenanceToggleDot" class="w-4 h-4 bg-white rounded-full shadow-md absolute left-0 top-0 transform transition-transform duration-300"></div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <button onclick="window.toggleNotifications()" class="text-gray-400 hover:text-white transition relative">
+                            <i class="fas fa-bell"></i>
+                            <span id="notificationBadge" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1 rounded-full hidden">0</span>
+                        </button>
+                        <div id="notificationMenu" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-md shadow-lg py-1 z-50 text-gray-800 border border-gray-200 animate-fade-in max-h-60 overflow-y-auto">
+                            <div class="px-4 py-2 text-xs font-bold text-gray-500 border-b flex justify-between items-center">
+                                <span>Recent Alerts</span>
+                                <button onclick="window.clearNotifications()" class="text-xs text-blue-600 hover:underline">Clear</button>
+                            </div>
+                            <div id="notificationList">
+                                <div class="px-4 py-3 text-sm text-gray-500 italic text-center">No new notifications</div>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="window.toggleDarkMode()" class="text-gray-400 hover:text-white transition" title="Toggle Dark Mode">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                    <button onclick="window.openEmailModal()" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold px-3 py-2 rounded transition hidden md:block">
+                        <i class="fas fa-envelope mr-1"></i> Email
+                    </button>
                     <span class="text-xs text-gray-400" id="systemTime"></span>
                     <button onclick="closeModal('adminPanelModal')" class="hover:text-gray-300"><i class="fas fa-times"></i></button>
                 </div>
@@ -128,22 +189,96 @@
                     
                     <!-- 1. SHIPMENTS VIEW -->
                     <div id="adminShipmentsView" class="admin-view">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                            <div class="md:col-span-2 bg-white p-4 rounded shadow border border-gray-200">
+                                <h3 class="font-bold text-gray-700 mb-2 text-sm uppercase">Shipment Status Overview</h3>
+                                <div class="h-48 relative">
+                                    <canvas id="statusChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="bg-white p-4 rounded shadow border border-gray-200 flex flex-col">
+                                <h3 class="font-bold text-gray-700 mb-2 text-sm uppercase">Recent Activity</h3>
+                                <div id="activityLogList" class="flex-grow overflow-y-auto text-sm space-y-2 max-h-48 custom-scrollbar">
+                                    <div class="text-gray-400 text-xs italic">No recent activity.</div>
+                                </div>
+                            </div>
+                        </div>
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                             <div>
-                                <h2 class="text-2xl font-bold text-gray-800">Shipment Management</h2>
+                                <h2 class="text-2xl font-bold text-gray-800 flex items-center">
+                                    Shipment Management
+                                    <span id="dashboardHealthIndicator" class="ml-3 text-xs font-normal px-2 py-1 rounded-full bg-gray-200 text-gray-500 flex items-center transition-colors duration-300">
+                                        <span class="w-2 h-2 rounded-full bg-gray-400 mr-2"></span> Connecting...
+                                    </span>
+                                </h2>
                                 <p class="text-sm text-gray-500" id="shipmentSubText">Connecting...</p>
                             </div>
-                            <button onclick="window.openEditModal()" class="bg-fedex-purple text-white px-4 py-2 rounded hover:bg-purple-800 transition shadow w-full md:w-auto">
-                                <i class="fas fa-plus mr-2"></i> New Shipment
-                            </button>
+                            <div class="flex gap-2 w-full md:w-auto flex-wrap justify-end">
+                                <button onclick="window.toggleAdvancedFilters()" class="bg-gray-600 text-white px-3 py-2 rounded hover:bg-gray-700 transition shadow whitespace-nowrap" title="Advanced Filters">
+                                    <i class="fas fa-sliders-h"></i> Filters
+                                </button>
+                                <input type="date" id="adminDateFilter" onchange="window.filterShipments()" class="border p-2 rounded text-sm focus:border-fedex-purple outline-none" title="Filter by Creation Date">
+                                <input type="text" id="adminSearchInput" onkeyup="window.filterShipments()" placeholder="Search Tracking ID..." class="border p-2 rounded text-sm focus:border-fedex-purple outline-none flex-grow md:w-48">
+                                <button onclick="window.exportToCSV()" class="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 transition shadow whitespace-nowrap" title="Export CSV">
+                                    <i class="fas fa-file-csv"></i>
+                                </button>
+                                <button onclick="window.openBulkStatusModal()" class="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 transition shadow whitespace-nowrap" title="Bulk Status Update">
+                                    <i class="fas fa-tasks"></i>
+                                </button>
+                                <button onclick="window.openInvoiceModal()" class="bg-purple-600 text-white px-3 py-2 rounded hover:bg-purple-700 transition shadow whitespace-nowrap" title="Generate Invoice">
+                                    <i class="fas fa-file-invoice"></i> Invoice
+                                </button>
+                                <button onclick="window.deleteSelectedShipments()" class="bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600 transition shadow whitespace-nowrap" title="Delete Selected">
+                                    <i class="fas fa-check-square"></i> <i class="fas fa-trash ml-1"></i>
+                                </button>
+                                <button onclick="window.deleteAllShipments()" class="bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 transition shadow whitespace-nowrap" title="Delete All Shipments">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                <button onclick="window.openEditModal()" class="bg-fedex-purple text-white px-4 py-2 rounded hover:bg-purple-800 transition shadow whitespace-nowrap">
+                                    <i class="fas fa-plus mr-2"></i> New
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Advanced Filters Panel -->
+                        <div id="advancedFiltersPanel" class="hidden bg-gray-50 p-4 rounded border border-gray-200 mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Status</label>
+                                <select id="filterStatus" onchange="window.filterShipments()" class="w-full border p-2 rounded text-sm focus:border-fedex-purple outline-none">
+                                    <option value="">All Statuses</option>
+                                    <option value="Label Created">Label Created</option>
+                                    <option value="In Transit">In Transit</option>
+                                    <option value="Pending">Pending</option>
+                                    <option value="Exception">Exception</option>
+                                    <option value="Delivered">Delivered</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Service Type</label>
+                                <select id="filterService" onchange="window.filterShipments()" class="w-full border p-2 rounded text-sm focus:border-fedex-purple outline-none">
+                                    <option value="">All Services</option>
+                                    <option value="FedEx Ground">FedEx Ground</option>
+                                    <option value="FedEx Express">FedEx Express</option>
+                                    <option value="FedEx Freight">FedEx Freight</option>
+                                    <option value="Standard Overnight">Standard Overnight</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Customer Email</label>
+                                <input type="email" id="filterEmail" onkeyup="window.filterShipments()" placeholder="Filter by email..." class="w-full border p-2 rounded text-sm focus:border-fedex-purple outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Location</label>
+                                <input type="text" id="filterLocation" onkeyup="window.filterShipments()" placeholder="Filter by location..." class="w-full border p-2 rounded text-sm focus:border-fedex-purple outline-none">
+                            </div>
                         </div>
                         <div class="bg-white rounded shadow overflow-x-auto border border-gray-200">
                             <table class="w-full admin-table text-sm">
                                 <thead>
                                     <tr>
+                                        <th class="w-10"><input type="checkbox" onclick="window.toggleSelectAll(this)"></th>
                                         <th>Tracking ID</th>
                                         <th>Status</th>
-                                        <th class="hidden sm:table-cell">Service</th>
+                                        <th class="hidden sm:table-cell" onclick="window.sortByDate()">Date <i class="fas fa-sort"></i></th>
                                         <th class="hidden sm:table-cell">Location</th>
                                         <th class="text-right">Actions</th>
                                     </tr>
@@ -152,6 +287,13 @@
                                     <tr><td colspan="5" class="text-center p-4 text-gray-500">No shipments found.</td></tr>
                                 </tbody>
                             </table>
+                        </div>
+                        <div id="paginationControls" class="flex justify-between items-center mt-4 hidden">
+                            <span class="text-sm text-gray-600" id="pageInfo">Page 1 of 1</span>
+                            <div class="flex space-x-2">
+                                <button onclick="window.changePage(-1)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm font-bold disabled:opacity-50" id="prevPageBtn">Prev</button>
+                                <button onclick="window.changePage(1)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm font-bold disabled:opacity-50" id="nextPageBtn">Next</button>
+                            </div>
                         </div>
                     </div>
 
@@ -231,6 +373,7 @@
                     <div>
                         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
                         <select id="editStatus" class="w-full border p-2 rounded outline-none" onchange="window.updateStatusColorPreview()">
+                            <option value="Label Created">Label Created</option>
                             <option value="Delivered">Delivered</option>
                             <option value="In Transit">In Transit</option>
                             <option value="Exception">Exception</option>
@@ -273,6 +416,28 @@
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Current Location</label>
                     <input type="text" id="editLocation" class="w-full border p-2 rounded focus:border-fedex-purple outline-none" placeholder="e.g. Memphis, TN">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Customer Email (for notifications)</label>
+                    <input type="email" id="editCustomerEmail" class="w-full border p-2 rounded focus:border-fedex-purple outline-none" placeholder="customer@example.com">
+                </div>
+                <div class="p-3 bg-blue-50 rounded border border-blue-100 mt-2">
+                    <h4 class="text-xs font-bold text-blue-800 uppercase mb-2">Add New Tracking Event</h4>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">Location</label>
+                            <input type="text" id="newHistLocation" class="w-full border p-1 rounded text-sm" placeholder="e.g. Memphis, TN">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">Message</label>
+                            <input type="text" id="newHistMessage" class="w-full border p-1 rounded text-sm" placeholder="e.g. Arrived at facility">
+                        </div>
+                    </div>
+                    <div class="mt-2 text-xs text-gray-500">Leave blank to keep existing history.</div>
+                </div>
+                <div class="mt-2">
+                    <h4 class="text-xs font-bold text-gray-500 uppercase mb-1">Travel History Log</h4>
+                    <div id="editHistoryList" class="bg-gray-50 border border-gray-200 rounded max-h-40 overflow-y-auto text-sm custom-scrollbar"></div>
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Delivery Text</label>
@@ -351,6 +516,180 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- 4. Email Modal -->
+    <div id="adminEmailModal" class="hidden fixed inset-0 z-[65] modal-overlay flex justify-center items-center px-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg overflow-hidden slide-down">
+            <div class="bg-fedex-purple p-3 text-white font-bold flex justify-between">
+                <span>Compose Email</span>
+                <button onclick="closeModal('adminEmailModal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Recipient Email</label>
+                    <input type="email" id="customEmailTo" class="w-full border p-2 rounded focus:border-fedex-purple">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Subject</label>
+                    <input type="text" id="customEmailSubject" class="w-full border p-2 rounded focus:border-fedex-purple">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Message</label>
+                    <textarea id="customEmailBody" rows="5" class="w-full border p-2 rounded focus:border-fedex-purple"></textarea>
+                </div>
+                <div class="flex justify-end space-x-2 pt-4 border-t">
+                    <button onclick="closeModal('adminEmailModal')" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+                    <button onclick="window.sendCustomEmailAction()" class="px-4 py-2 bg-fedex-orange text-white rounded hover:bg-orange-600 font-bold">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Bulk Status Modal -->
+    <div id="adminBulkStatusModal" class="hidden fixed inset-0 z-[65] modal-overlay flex justify-center items-center px-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-sm overflow-hidden slide-down">
+            <div class="bg-fedex-purple p-3 text-white font-bold flex justify-between">
+                <span>Bulk Status Update</span>
+                <button onclick="closeModal('adminBulkStatusModal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-gray-600">Updating <span id="bulkCount" class="font-bold">0</span> shipments.</p>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">New Status</label>
+                    <select id="bulkStatusInput" class="w-full border p-2 rounded outline-none">
+                        <option value="Label Created">Label Created</option>
+                        <option value="In Transit">In Transit</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Exception">Exception</option>
+                        <option value="Delivered">Delivered</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Location (Optional)</label>
+                    <input type="text" id="bulkLocationInput" class="w-full border p-2 rounded focus:border-fedex-purple" placeholder="e.g. Distribution Center">
+                </div>
+                <div class="flex justify-end space-x-2 pt-4 border-t">
+                    <button onclick="closeModal('adminBulkStatusModal')" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+                    <button onclick="window.saveBulkStatus()" class="px-4 py-2 bg-fedex-orange text-white rounded hover:bg-orange-600 font-bold">Update All</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invoice Modal -->
+    <div id="invoiceModal" class="hidden fixed inset-0 z-[65] modal-overlay flex justify-center items-center px-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden slide-down max-h-[90vh] overflow-y-auto">
+            <div class="bg-fedex-purple p-3 text-white font-bold flex justify-between sticky top-0 z-10">
+                <span>Generate Invoice</span>
+                <button onclick="closeModal('invoiceModal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Invoice Date</label>
+                        <input type="date" id="invoiceDate" class="w-full border p-2 rounded text-sm focus:border-fedex-purple outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Invoice Number</label>
+                        <input type="text" id="invoiceNumber" class="w-full border p-2 rounded text-sm focus:border-fedex-purple outline-none" placeholder="INV-001">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Bill To (Customer)</label>
+                    <input type="text" id="billToName" class="w-full border p-2 rounded text-sm mb-2 focus:border-fedex-purple outline-none" placeholder="Customer Name">
+                    <input type="email" id="billToEmail" class="w-full border p-2 rounded text-sm focus:border-fedex-purple outline-none" placeholder="Customer Email">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-2">Shipments to Include</label>
+                    <div id="invoiceShipmentsList" class="border rounded p-3 bg-gray-50 max-h-40 overflow-y-auto"></div>
+                    <p class="text-xs text-gray-500 mt-2">Selected: <span id="invoiceShipmentsCount">0</span></p>
+                </div>
+                <div class="grid grid-cols-2 gap-4 bg-blue-50 p-4 rounded border border-blue-200">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Subtotal</label>
+                        <div class="text-2xl font-bold text-gray-800">$<span id="invoiceSubtotal">0.00</span></div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Total</label>
+                        <div class="text-2xl font-bold text-fedex-purple">$<span id="invoiceTotal">0.00</span></div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Notes</label>
+                    <textarea id="invoiceNotes" rows="3" class="w-full border p-2 rounded text-sm focus:border-fedex-purple outline-none" placeholder="Additional notes or payment terms..."></textarea>
+                </div>
+                <div class="flex justify-end space-x-2 pt-4 border-t">
+                    <button onclick="closeModal('invoiceModal')" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+                    <button onclick="window.generateInvoicePDF()" class="px-4 py-2 bg-fedex-orange text-white rounded hover:bg-orange-600 font-bold"><i class="fas fa-file-pdf mr-2"></i> Generate PDF</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delivery Confirmation Modal -->
+    <div id="deliveryConfirmModal" class="hidden fixed inset-0 z-[65] modal-overlay flex justify-center items-center px-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden slide-down max-h-[90vh] overflow-y-auto">
+            <div class="bg-fedex-purple p-3 text-white font-bold flex justify-between sticky top-0 z-10">
+                <span>Delivery Confirmation</span>
+                <button onclick="closeModal('deliveryConfirmModal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="bg-blue-50 border border-blue-200 p-4 rounded text-sm text-blue-800">
+                    <i class="fas fa-info-circle mr-2"></i> Complete delivery proof by capturing signature or photo
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-2">Recipient Name</label>
+                    <input type="text" id="recipientSignName" class="w-full border p-2 rounded text-sm focus:border-fedex-purple outline-none" placeholder="Person who received package">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-2">Delivery Photo</label>
+                    <div class="border-2 border-dashed border-gray-300 rounded p-8 text-center bg-gray-50 cursor-pointer hover:bg-gray-100 transition" onclick="document.getElementById('deliveryPhotoInput').click()">
+                        <i class="fas fa-camera text-4xl text-gray-300 mb-2"></i>
+                        <p class="text-sm text-gray-600">Click to capture photo or <span class="text-blue-600 underline">browse files</span></p>
+                        <input type="file" id="deliveryPhotoInput" accept="image/*" class="hidden" onchange="window.handleDeliveryPhoto(event)">
+                    </div>
+                    <div id="photoPreview" class="mt-2 hidden">
+                        <img id="photoImg" src="" class="max-w-full rounded border border-gray-200">
+                        <button onclick="window.clearDeliveryPhoto()" class="mt-2 text-xs text-red-600 hover:underline"><i class="fas fa-trash mr-1"></i> Remove Photo</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-2">Signature Pad</label>
+                    <canvas id="signaturePad" class="w-full border-2 border-gray-300 rounded bg-white cursor-crosshair" height="150"></canvas>
+                    <div class="text-xs text-gray-500 mt-1">Sign using your mouse or touch screen</div>
+                    <button onclick="window.clearSignaturePad()" class="text-xs text-gray-600 hover:underline mt-2"><i class="fas fa-eraser mr-1"></i> Clear Signature</button>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-2">Delivery Notes</label>
+                    <textarea id="deliveryNotes" rows="3" class="w-full border p-2 rounded text-sm focus:border-fedex-purple outline-none" placeholder="Any special delivery instructions or notes..."></textarea>
+                </div>
+                <div class="flex justify-end space-x-2 pt-4 border-t">
+                    <button onclick="closeModal('deliveryConfirmModal')" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+                    <button onclick="window.submitDeliveryConfirmation()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold"><i class="fas fa-check mr-2"></i> Confirm Delivery</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="liveChatWidget" class="fixed bottom-5 right-5 z-[80] flex flex-col items-end">
+        <!-- Chat Box -->
+        <div id="chatBox" class="hidden bg-white w-80 h-96 rounded-lg shadow-2xl border border-gray-200 flex flex-col mb-4 slide-down overflow-hidden">
+            <div class="bg-fedex-purple p-3 text-white font-bold flex justify-between items-center">
+                <span><i class="fas fa-headset mr-2"></i>Support Chat</span>
+                <button onclick="window.toggleChat()"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="chatMessages" class="flex-grow p-4 overflow-y-auto bg-gray-50 space-y-3 text-sm custom-scrollbar">
+                <div class="flex justify-start"><div class="bg-gray-200 text-gray-800 p-2 rounded-lg rounded-tl-none max-w-[85%]">Hello! How can I help you today?</div></div>
+            </div>
+            <div class="p-3 border-t border-gray-200 bg-white flex">
+                <input type="text" id="chatInput" class="flex-grow border border-gray-300 rounded-l px-3 py-2 text-sm focus:outline-none focus:border-fedex-purple" placeholder="Type a message..." onkeypress="if(event.key === 'Enter') window.sendChatMessage()">
+                <button onclick="window.sendChatMessage()" class="bg-fedex-purple text-white px-3 py-2 rounded-r hover:bg-purple-800"><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
+        <!-- Toggle Button -->
+        <button onclick="window.toggleChat()" class="bg-fedex-purple text-white w-14 h-14 rounded-full shadow-lg hover:bg-purple-800 transition transform hover:scale-110 flex items-center justify-center text-2xl">
+            <i class="fas fa-comment-dots"></i>
+        </button>
     </div>
 
     <!-- Navigation -->
@@ -587,6 +926,8 @@
                     document.getElementById('dbStatus').classList.remove('text-yellow-600');
                     document.getElementById('dbStatus').classList.add('text-green-600');
                     document.getElementById('shipmentSubText').textContent = "Live data from Firebase Cloud.";
+                    document.getElementById('dashboardHealthIndicator').className = "ml-3 text-xs font-normal px-2 py-1 rounded-full bg-green-100 text-green-800 flex items-center border border-green-200";
+                    document.getElementById('dashboardHealthIndicator').innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> System Online';
                     isFirebaseReady = true;
                     setupRealtimeListeners();
                 }).catch((error) => {
@@ -612,6 +953,8 @@
             isFirebaseReady = false;
             document.getElementById('dbStatus').textContent = "Local Mode";
             document.getElementById('shipmentSubText').textContent = "Local Storage (Demo Mode)";
+            document.getElementById('dashboardHealthIndicator').className = "ml-3 text-xs font-normal px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 flex items-center border border-yellow-200";
+            document.getElementById('dashboardHealthIndicator').innerHTML = '<span class="w-2 h-2 rounded-full bg-yellow-500 mr-2 animate-pulse"></span> Local Mode';
             
             // Show toast on load
             setTimeout(() => {
@@ -670,6 +1013,65 @@
                     refreshAdminUI();
                 }
             },
+            async deleteAllShipments() {
+                if(isFirebaseReady) {
+                    const list = window.adminShipmentData || [];
+                    const promises = list.map(item => deleteDoc(doc(db, "shipments", item.id)));
+                    await Promise.all(promises);
+                } else {
+                    saveLocal('fedex_db', {});
+                    refreshAdminUI();
+                }
+            },
+            async deleteSelectedShipments(ids) {
+                if(isFirebaseReady) {
+                    const promises = ids.map(id => deleteDoc(doc(db, "shipments", id)));
+                    await Promise.all(promises);
+                } else {
+                    const localDB = loadLocal('fedex_db', DEFAULT_DB);
+                    ids.forEach(id => delete localDB[id]);
+                    saveLocal('fedex_db', localDB);
+                    refreshAdminUI();
+                }
+            },
+             async duplicateShipment(id) {
+                const shipmentData = await Adapter.getShipment(id);
+                if (shipmentData) {
+                    let newId;
+                    let isUnique = false;
+                    while(!isUnique) {
+                        newId = Math.floor(100000000000 + Math.random() * 900000000000).toString();
+                        const existing = await Adapter.getShipment(newId);
+                        if(!existing) isUnique = true;
+                    }
+                    await Adapter.saveShipment(newId, { ...shipmentData, id: newId });
+                    window.logActivity(`Duplicated shipment ${id} to ${newId}`);
+                    window.showToast(`Shipment ${id} duplicated as ${newId}`);
+                }
+            },
+            async bulkUpdateStatus(ids, status, location) {
+                const updates = ids.map(async (id) => {
+                    const current = await this.getShipment(id);
+                    if (!current) return;
+                    
+                    const history = [...(current.history || [])];
+                    if (location) {
+                        history.unshift({
+                            time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                            date: new Date().toLocaleDateString(),
+                            location: location,
+                            message: `Bulk Update: ${status}`,
+                            active: true, completed: false
+                        });
+                    }
+                    
+                    const updateData = { status: status, statusColor: getStatusColor(status), history: history };
+                    if (status === 'Delivered') updateData.progressBar = '100%';
+                    await this.saveShipment(id, updateData);
+                });
+                await Promise.all(updates);
+                window.logActivity(`Bulk updated ${ids.length} shipments`);
+            },
             // Users
             async getUsers() {
                 if(isFirebaseReady) { return []; /* handled by listener */ } 
@@ -708,6 +1110,99 @@
                     refreshAdminUI();
                 }
             }
+        };
+
+        // --- MAPS & NOTIFICATIONS ---
+        let mapInstance = null;
+        let mapMarker = null;
+
+        window.initMap = () => {
+            const mapDiv = document.getElementById('map');
+            if (!mapDiv) return;
+            
+            // Default to Memphis, TN (FedEx HQ)
+            const memphis = { lat: 35.1495, lng: -90.0490 };
+            mapInstance = new google.maps.Map(mapDiv, {
+                zoom: 10,
+                center: memphis,
+            });
+            
+            // Add a marker
+            mapMarker = new google.maps.Marker({
+                position: memphis,
+                map: mapInstance,
+                title: "FedEx World Hub"
+            });
+        };
+
+        window.searchMap = () => {
+            const query = document.getElementById('mapSearchInput').value;
+            if(!query || !window.google) return;
+            
+            const geocoder = new google.maps.Geocoder();
+            geocoder.geocode({ 'address': query }, (results, status) => {
+                if (status === 'OK') {
+                    mapInstance.setCenter(results[0].geometry.location);
+                    mapMarker.setPosition(results[0].geometry.location);
+                } else {
+                    window.showToast('Location not found', 'error');
+                }
+            });
+        };
+
+        window.sendEmailUpdate = (id, status, email) => {
+            // IMPORTANT: The private key you provided should NEVER be used in client-side
+            // JavaScript code as it would be exposed to anyone visiting the website.
+            // EmailJS integration on the front-end only requires your Public Key.
+
+            const serviceID = "service_7p0eqwj";
+            const templateID = "template_p1hhlhk";
+            const publicKey = "C4BuGocvCyDxwschP";
+
+            emailjs.init(publicKey);
+            
+            // Ensure your EmailJS template (template_p1hhlhk) is configured to use 'to_email'.
+            const params = { to_email: email, tracking_id: id, new_status: status };
+
+            emailjs.send(serviceID, templateID, params)
+                .then(() => window.showToast(`Email update sent for ${id}`, "success"))
+                .catch((err) => { console.error("EmailJS Error:", err); window.showToast("Email failed to send. Check console.", "error"); });
+        };
+
+        window.sendCreationEmail = (trackingId, email, data) => {
+            const serviceID = "service_7p0eqwj";
+            const templateID = "template_n7wa86z";
+            const publicKey = "C4BuGocvCyDxwschP";
+
+            emailjs.init(publicKey);
+
+            // Ensure your EmailJS template (template_n7wa86z) has these variables:
+            // {{to_email}}, {{tracking_id}}, {{recipient_name}}, {{service_type}}
+            const params = { to_email: email, tracking_id: trackingId, recipient_name: data.recipient.name, service_type: data.service };
+
+            emailjs.send(serviceID, templateID, params)
+                .then(() => window.showToast(`Confirmation email sent to ${email}`, "success"))
+                .catch((err) => { console.error("EmailJS Error:", err); });
+        };
+
+        window.sendCustomEmailAction = () => {
+            const to = document.getElementById('customEmailTo').value;
+            const subject = document.getElementById('customEmailSubject').value;
+            const body = document.getElementById('customEmailBody').value;
+            
+            if(!to || !body) return window.showToast("Email and Message required", "error");
+            
+            const serviceID = "service_7p0eqwj";
+            const templateID = "template_p1hhlhk"; // Using existing template as fallback
+            const publicKey = "C4BuGocvCyDxwschP";
+            
+            emailjs.init(publicKey);
+            
+            const params = { to_email: to, subject: subject, message: body, tracking_id: 'General', new_status: 'Notification' };
+            
+            emailjs.send(serviceID, templateID, params)
+                .then(() => { window.showToast("Email sent", "success"); window.closeModal('adminEmailModal'); })
+                .catch((err) => { console.error("EmailJS Error:", err); window.showToast("Failed to send", "error"); });
         };
 
         // --- APP LOGIC ---
@@ -783,11 +1278,49 @@
                 
                 setTimeout(() => {
                     window.openModal('adminPanelModal');
+                    window.logActivity("Admin logged in");
                     window.switchAdminView('shipments');
                 }, 500);
+            } else if (window.maintenanceMode) {
+                window.showToast("Maintenance Mode Active. Admin access only.", "error");
             } else {
                 window.showToast("Invalid credentials. Try Admin / Admin123", "error");
             }
+        };
+
+        window.handlePasswordReset = () => {
+            const email = document.getElementById('loginEmail').value;
+            if(!email) {
+                window.showToast("Please enter your email address first.", "error");
+                document.getElementById('loginEmail').focus();
+                return;
+            }
+            if(confirm(`Send password reset link to ${email}?`)) {
+                window.showToast(`Reset link sent to ${email}`, "success");
+            }
+        };
+
+        // --- LIVE CHAT ---
+        window.toggleChat = () => {
+            const box = document.getElementById('chatBox');
+            box.classList.toggle('hidden');
+            if(!box.classList.contains('hidden')) document.getElementById('chatInput').focus();
+        };
+
+        window.sendChatMessage = () => {
+            const input = document.getElementById('chatInput');
+            const msg = input.value.trim();
+            if(!msg) return;
+
+            const container = document.getElementById('chatMessages');
+            container.innerHTML += `<div class="flex justify-end"><div class="bg-fedex-purple text-white p-2 rounded-lg rounded-tr-none max-w-[85%]">${msg}</div></div>`;
+            input.value = '';
+            container.scrollTop = container.scrollHeight;
+
+            setTimeout(() => {
+                container.innerHTML += `<div class="flex justify-start"><div class="bg-gray-200 text-gray-800 p-2 rounded-lg rounded-tl-none max-w-[85%]">Thanks for reaching out. An agent will be with you shortly.</div></div>`;
+                container.scrollTop = container.scrollHeight;
+            }, 1000);
         };
 
         window.handleLogout = () => {
@@ -809,35 +1342,118 @@
             const newId = document.getElementById('editTrackingId').value.trim();
             if (!newId) return alert("ID required");
 
+            // Check for duplicates if ID is new or changed
+            if (!originalId || originalId !== newId) {
+                const existing = await Adapter.getShipment(newId);
+                if (existing) {
+                    return window.showToast(`Tracking ID ${newId} already exists.`, "error");
+                }
+            }
+
+            const customerEmail = document.getElementById('editCustomerEmail').value.trim();
+            // Validate email format if provided
+            if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+                return window.showToast("Please enter a valid customer email address.", "error");
+            }
+            
+            const oldStatus = document.getElementById('editStatus').dataset.original;
+            const newStatus = document.getElementById('editStatus').value;
+
+            // Handle History
+            let updatedHistory = [...(window.currentShipmentHistory || [])];
+            const newHistLoc = document.getElementById('newHistLocation').value.trim();
+            const newHistMsg = document.getElementById('newHistMessage').value.trim();
+
+            if (newHistLoc && newHistMsg) {
+                updatedHistory.unshift({
+                    time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                    date: new Date().toLocaleDateString(),
+                    location: newHistLoc,
+                    message: newHistMsg,
+                    active: true, completed: false
+                });
+            }
+
             const data = {
-                status: document.getElementById('editStatus').value,
+                status: newStatus,
                 progressBar: document.getElementById('editProgress').value + '%',
-                statusColor: getStatusColor(document.getElementById('editStatus').value),
+                statusColor: getStatusColor(newStatus),
                 service: document.getElementById('editService').value,
                 weight: document.getElementById('editWeight').value,
                 dimensions: document.getElementById('editDims').value,
                 pieces: document.getElementById('editPieces').value,
-                history: [{
-                    time: new Date().toLocaleTimeString(),
-                    date: new Date().toLocaleDateString(),
-                    location: document.getElementById('editLocation').value,
-                    message: "Status updated",
-                    active: true, 
-                    completed: false
-                }],
-                deliveryDate: document.getElementById('editDate').value
+                history: updatedHistory,
+                deliveryDate: document.getElementById('editDate').value,
+                customerEmail: customerEmail
             };
 
             await Adapter.saveShipment(newId, data);
+            window.logActivity(originalId ? `Updated shipment ${newId}` : `Created shipment ${newId}`);
+            window.addNotification(originalId ? `Shipment ${newId} updated` : `New shipment ${newId} created`);
             window.closeModal('adminEditModal');
+            
+            if (oldStatus && oldStatus !== newStatus && customerEmail) {
+                window.sendEmailUpdate(newId, newStatus, customerEmail);
+            }
             window.showToast("Saved.");
         };
 
         window.deleteShipment = async (id) => {
             if(confirm(`Delete ${id}?`)) {
                 await Adapter.deleteShipment(id);
+                window.logActivity(`Deleted shipment ${id}`);
+                window.addNotification(`Shipment ${id} deleted`);
                 window.showToast("Deleted.");
             }
+        };
+
+        window.deleteAllShipments = async () => {
+            if(confirm("WARNING: Are you sure you want to DELETE ALL shipments? This cannot be undone.")) {
+                if(confirm("Double check: Delete everything?")) {
+                    await Adapter.deleteAllShipments();
+                    window.logActivity("Deleted ALL shipments");
+                    window.showToast("All shipments deleted.");
+                }
+            }
+        };
+
+        window.deleteSelectedShipments = async () => {
+            const checkboxes = document.querySelectorAll('.shipment-checkbox:checked');
+            if(checkboxes.length === 0) return window.showToast("No shipments selected", "error");
+            
+            if(confirm(`Delete ${checkboxes.length} selected shipments?`)) {
+                const ids = Array.from(checkboxes).map(cb => cb.value);
+                await Adapter.deleteSelectedShipments(ids);
+                window.logActivity(`Deleted ${ids.length} shipments`);
+                window.showToast("Selected shipments deleted.");
+                const headerCb = document.querySelector('thead input[type="checkbox"]');
+                if(headerCb) headerCb.checked = false;
+            }
+        };
+
+        window.exportToCSV = () => {
+            const data = window.currentFilteredShipments || [];
+            if(!data.length) return window.showToast("No data to export", "error");
+            
+            const headers = ["Tracking ID", "Status", "Service", "Location", "Date", "Email", "Recipient Address"];
+            const rows = data.map(d => [
+                d.id,
+                d.status,
+                d.service,
+                d.history?.[0]?.location || '',
+                d.deliveryDate,
+                d.customerEmail || '',
+                d.recipient?.addr || ''
+            ].map(e => `"${String(e).replace(/"/g, '""')}"`).join(","));
+            
+            const csvContent = [headers.join(","), ...rows].join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `shipments_export_${new Date().toISOString().slice(0,10)}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         };
 
         window.saveUser = async () => {
@@ -849,6 +1465,7 @@
                 role: document.getElementById('userRoleInput').value
             };
             await Adapter.saveUser(data);
+            window.logActivity(`Saved user ${data.name}`);
             window.closeModal('adminUserModal');
             window.showToast("User saved.");
         };
@@ -864,6 +1481,7 @@
                 type: document.getElementById('locTypeInput').value
             };
             await Adapter.saveLocation(data);
+            window.logActivity(`Saved location ${data.name}`);
             window.closeModal('adminLocationModal');
             window.showToast("Location saved.");
         };
@@ -880,14 +1498,25 @@
             if(!isFirebaseReady) return;
             
             onSnapshot(collection(db, "shipments"), (snap) => {
-                // If in shipment view, re-render
-                if(document.getElementById('adminShipmentsView').classList.contains('hidden') === false) {
-                    const list = [];
-                    snap.forEach(doc => list.push({id: doc.id, ...doc.data()}));
-                    renderShipmentTable(list);
-                }
+                const list = [];
+                snap.forEach(doc => list.push({id: doc.id, ...doc.data()}));
+                window.adminShipmentData = list;
+                window.filterShipments();
+                window.renderStatusChart();
+                window.renderActivityLog();
             });
-            // Similar listeners can be added for Users/Locations
+
+            onSnapshot(collection(db, "users"), (snap) => {
+                const list = [];
+                snap.forEach(doc => list.push({id: doc.id, ...doc.data()}));
+                renderUserTable(list);
+            });
+
+            onSnapshot(collection(db, "locations"), (snap) => {
+                const list = [];
+                snap.forEach(doc => list.push({id: doc.id, ...doc.data()}));
+                renderLocTable(list);
+            });
         }
 
         function refreshAdminUI() {
@@ -896,7 +1525,10 @@
             if(view === 'nav-shipments') {
                 const dbLocal = loadLocal('fedex_db', DEFAULT_DB);
                 const list = Object.keys(dbLocal).map(k => ({id: k, ...dbLocal[k]}));
-                renderShipmentTable(list);
+                window.adminShipmentData = list;
+                window.filterShipments();
+                window.renderStatusChart();
+                window.renderActivityLog();
             } else if (view === 'nav-users') {
                 renderUserTable(loadLocal('fedex_users', DEFAULT_USERS));
             } else if (view === 'nav-locations') {
@@ -904,22 +1536,115 @@
             }
         }
 
-        function renderShipmentTable(list) {
-            const tbody = document.getElementById('adminTableBody');
-            tbody.innerHTML = '';
-            if(list.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4">No shipments.</td></tr>'; return; }
-            list.forEach(data => {
-                tbody.innerHTML += `<tr>
-                    <td class="font-mono font-bold">${data.id}</td>
-                    <td><span class="px-2 py-1 rounded text-xs text-white ${data.statusColor}">${data.status}</span></td>
-                    <td class="hidden sm:table-cell text-xs">${data.service || '-'}</td>
-                    <td class="hidden sm:table-cell text-xs">${data.history?.[0]?.location || 'N/A'}</td>
-                    <td class="text-right">
-                        <button onclick="window.openEditModal('${data.id}')" class="text-blue-600 mr-2"><i class="fas fa-edit"></i></button>
-                        <button onclick="window.deleteShipment('${data.id}')" class="text-red-600"><i class="fas fa-trash"></i></button>
-                    </td></tr>`;
+        window.toggleAdvancedFilters = () => {
+            const panel = document.getElementById('advancedFiltersPanel');
+            panel.classList.toggle('hidden');
+        };
+
+        window.currentPage = 1;
+        window.rowsPerPage = 10;
+        window.currentFilteredShipments = [];
+
+        window.filterShipments = () => {
+            const query = document.getElementById('adminSearchInput')?.value.toLowerCase() || '';
+            const dateQuery = document.getElementById('adminDateFilter')?.value;
+            const statusFilter = document.getElementById('filterStatus')?.value || '';
+            const serviceFilter = document.getElementById('filterService')?.value || '';
+            const emailFilter = document.getElementById('filterEmail')?.value.toLowerCase() || '';
+            const locationFilter = document.getElementById('filterLocation')?.value.toLowerCase() || '';
+            const list = window.adminShipmentData || [];
+            
+            const filtered = list.filter(item => {
+                // Text search
+                const matchesText = item.id.toLowerCase().includes(query) || 
+                                  (item.status && item.status.toLowerCase().includes(query));
+                
+                // Date filter
+                let matchesDate = true;
+                if (dateQuery) {
+                    const createdDateStr = item.history && item.history.length > 0 ? item.history[item.history.length - 1].date : null;
+                    if (createdDateStr) {
+                        const [y, m, d] = dateQuery.split('-');
+                        matchesDate = new Date(createdDateStr).toDateString() === new Date(y, m-1, d).toDateString();
+                    } else {
+                        matchesDate = false;
+                    }
+                }
+                
+                // Status filter
+                const matchesStatus = !statusFilter || item.status === statusFilter;
+                
+                // Service filter
+                const matchesService = !serviceFilter || (item.service && item.service.includes(serviceFilter));
+                
+                // Email filter
+                const matchesEmail = !emailFilter || (item.customerEmail && item.customerEmail.toLowerCase().includes(emailFilter));
+                
+                // Location filter
+                const matchesLocation = !locationFilter || (item.history && item.history.some(h => h.location.toLowerCase().includes(locationFilter)));
+                
+                return matchesText && matchesDate && matchesStatus && matchesService && matchesEmail && matchesLocation;
             });
+            
+            window.currentFilteredShipments = filtered;
+            window.currentPage = 1;
+            renderShipmentTable();
+        };
+
+        // Template Engine for Rows
+        const shipmentRowTemplate = (data) => `
+            <tr class="hover:bg-gray-50 transition-colors">
+                <td><input type="checkbox" class="shipment-checkbox" value="${data.id}"></td>
+                <td class="font-mono font-bold text-gray-700">${data.id}</td>
+                <td><span class="px-2 py-1 rounded text-xs text-white font-semibold ${data.statusColor}">${data.status}</span></td>
+                <td class="hidden sm:table-cell text-xs text-gray-600">${data.service || '-'}</td>
+                <td class="hidden sm:table-cell text-xs text-gray-600">${data.history?.[0]?.location || 'N/A'}</td>
+                <td class="text-right space-x-1">
+                    ${data.status !== 'Delivered' ? `<button onclick="window.openDeliveryConfirmation('${data.id}')" class="text-green-600 hover:text-green-800 transition" title="Delivery Confirmation"><i class="fas fa-check-double"></i></button>` : ''}
+                    <button onclick="window.openEditModal('${data.id}')" class="text-blue-600 hover:text-blue-800 transition" title="Edit"><i class="fas fa-edit"></i></button>
+                    <button onclick="window.duplicateShipment('${data.id}')" class="text-gray-500 hover:text-gray-700 transition" title="Duplicate"><i class="fas fa-copy"></i></button>
+                    <button onclick="window.deleteShipment('${data.id}')" class="text-red-500 hover:text-red-700 transition" title="Delete"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>`;
+
+        function renderShipmentTable() {
+            const list = window.currentFilteredShipments || [];
+            const tbody = document.getElementById('adminTableBody');
+            const pagination = document.getElementById('paginationControls');
+            
+            tbody.innerHTML = '';
+            if(list.length === 0) { 
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center p-8 text-gray-500 italic">No shipments found matching your criteria.</td></tr>'; 
+                pagination.classList.add('hidden');
+                return; 
+            }
+
+            const totalPages = Math.ceil(list.length / window.rowsPerPage);
+            const start = (window.currentPage - 1) * window.rowsPerPage;
+            const end = start + window.rowsPerPage;
+            const pageData = list.slice(start, end);
+            
+            tbody.innerHTML = pageData.map(shipmentRowTemplate).join('');
+
+            pagination.classList.remove('hidden');
+            document.getElementById('pageInfo').textContent = `Page ${window.currentPage} of ${totalPages} (${list.length} items)`;
+            document.getElementById('prevPageBtn').disabled = window.currentPage === 1;
+            document.getElementById('nextPageBtn').disabled = window.currentPage === totalPages;
         }
+
+        window.changePage = (delta) => {
+            const totalPages = Math.ceil(window.currentFilteredShipments.length / window.rowsPerPage);
+            const newPage = window.currentPage + delta;
+            if(newPage >= 1 && newPage <= totalPages) {
+                window.currentPage = newPage;
+                renderShipmentTable();
+            }
+        };
+
+        window.toggleSelectAll = (source) => {
+            const checkboxes = document.querySelectorAll('.shipment-checkbox');
+            checkboxes.forEach(cb => cb.checked = source.checked);
+        };
 
         function renderUserTable(list) {
             const tbody = document.getElementById('adminUsersTableBody');
@@ -971,15 +1696,347 @@
             container.classList.remove('hidden');
         }
 
+        window.sortByDate = () => {
+         
+         const list = window.currentFilteredShipments || [];
+
+         if (list.length === 0) {
+             window.showToast("No shipments to sort", "error");
+             return;
+         }
+
+         // Toggle sorting direction
+         window.sortAscending = !window.sortAscending;
+
+         // Sort the list based on the last history date
+         list.sort((a, b) => {
+             const dateA = a.history && a.history.length > 0 ? new Date(a.history[a.history.length - 1].date) : null;
+             const dateB = b.history && b.history.length > 0 ? new Date(b.history[b.history.length - 1].date) : null;
+
+             if (dateA && dateB) {
+                 return window.sortAscending ? dateA - dateB : dateB - dateA;
+             } else if (dateA) {
+                 return window.sortAscending ? -1 : 1;
+             } else if (dateB) {
+                 return window.sortAscending ? 1 : -1;
+             } else {
+                 return 0; // Both null, maintain order
+             }
+         });
+         renderShipmentTable();
+ };
+
+        // --- CHART & BULK ACTIONS ---
+        let statusChartInstance = null;
+        window.renderStatusChart = () => {
+            const ctx = document.getElementById('statusChart');
+            if (!ctx) return;
+            
+            const list = window.adminShipmentData || [];
+            const counts = { 'Label Created': 0, 'In Transit': 0, 'Pending': 0, 'Exception': 0, 'Delivered': 0 };
+            
+            list.forEach(item => {
+                const s = item.status || 'Label Created';
+                if (counts[s] !== undefined) counts[s]++;
+                else counts[s] = (counts[s] || 0) + 1;
+            });
+            
+            const data = {
+                labels: Object.keys(counts),
+                datasets: [{
+                    label: 'Shipments',
+                    data: Object.values(counts),
+                    backgroundColor: ['#3b82f6', '#f97316', '#6366f1', '#ef4444', '#22c55e'],
+                    borderWidth: 0
+                }]
+            };
+            
+            if (statusChartInstance) {
+                statusChartInstance.data = data;
+                statusChartInstance.update();
+            } else {
+                statusChartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: data,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } },
+                        layout: { padding: 10 }
+                    }
+                });
+            }
+        };
+
+        window.openBulkStatusModal = () => {
+            const checkboxes = document.querySelectorAll('.shipment-checkbox:checked');
+            if(checkboxes.length === 0) return window.showToast("No shipments selected", "error");
+            document.getElementById('bulkCount').textContent = checkboxes.length;
+            window.openModal('adminBulkStatusModal');
+        };
+
+        window.saveBulkStatus = async () => {
+            const ids = Array.from(document.querySelectorAll('.shipment-checkbox:checked')).map(cb => cb.value);
+            const status = document.getElementById('bulkStatusInput').value;
+            const location = document.getElementById('bulkLocationInput').value;
+            await Adapter.bulkUpdateStatus(ids, status, location);
+            window.closeModal('adminBulkStatusModal');
+            window.showToast("Bulk update complete.");
+            document.querySelectorAll('.shipment-checkbox').forEach(cb => cb.checked = false);
+            const headerCb = document.querySelector('thead input[type="checkbox"]');
+            if(headerCb) headerCb.checked = false;
+        };
+
+        // --- ACTIVITY LOG & DARK MODE ---
+        window.toggleDarkMode = () => {
+            const modal = document.getElementById('adminPanelModal');
+            modal.classList.toggle('dark');
+            const isDark = modal.classList.contains('dark');
+            window.showToast(isDark ? "Dark Mode Enabled" : "Light Mode Enabled");
+        };
+
+        window.logActivity = (action) => {
+            const log = loadLocal('fedex_activity', []);
+            const entry = {
+                action: action,
+                time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+            };
+            log.unshift(entry);
+            if (log.length > 5) log.pop();
+            saveLocal('fedex_activity', log);
+            window.renderActivityLog();
+        };
+
+        window.renderActivityLog = () => {
+            const log = loadLocal('fedex_activity', []);
+            const container = document.getElementById('activityLogList');
+            if(!container) return;
+            if (log.length === 0) { container.innerHTML = '<div class="text-gray-400 text-xs italic">No recent activity.</div>'; return; }
+            container.innerHTML = log.map(item => `
+                <div class="flex justify-between items-start border-b border-gray-100 pb-1 last:border-0">
+                    <span class="text-xs font-medium text-gray-700">${item.action}</span>
+                    <span class="text-[10px] text-gray-400 whitespace-nowrap ml-2">${item.time}</span>
+                </div>`).join('');
+        };
+
         // --- EXPORTS ---
         window.openModal = (id) => document.getElementById(id).classList.remove('hidden');
         window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
+        
+        // --- DELIVERY CONFIRMATION SYSTEM ---
+        let signaturePadContext = null;
+        let isDrawing = false;
+
+        window.initSignaturePad = () => {
+            const canvas = document.getElementById('signaturePad');
+            if (!canvas || signaturePadContext) return;
+            
+            signaturePadContext = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            
+            const ctx = signaturePadContext;
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#333';
+            
+            canvas.onmousedown = (e) => {
+                isDrawing = true;
+                ctx.beginPath();
+                ctx.moveTo(e.offsetX, e.offsetY);
+            };
+            
+            canvas.onmousemove = (e) => {
+                if (!isDrawing) return;
+                ctx.lineTo(e.offsetX, e.offsetY);
+                ctx.stroke();
+            };
+            
+            canvas.onmouseup = () => { isDrawing = false; };
+            canvas.onmouseout = () => { isDrawing = false; };
+            
+            // Touch support
+            canvas.ontouchstart = (e) => {
+                isDrawing = true;
+                const touch = e.touches[0];
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+            };
+            
+            canvas.ontouchmove = (e) => {
+                if (!isDrawing) return;
+                e.preventDefault();
+                const touch = e.touches[0];
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            };
+            
+            canvas.ontouchend = () => { isDrawing = false; };
+        };
+
+        window.clearSignaturePad = () => {
+            const canvas = document.getElementById('signaturePad');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        };
+
+        window.handleDeliveryPhoto = (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    document.getElementById('photoImg').src = e.target.result;
+                    document.getElementById('photoPreview').classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+
+        window.clearDeliveryPhoto = () => {
+            document.getElementById('deliveryPhotoInput').value = '';
+            document.getElementById('photoPreview').classList.add('hidden');
+        };
+
+        window.openDeliveryConfirmation = (shipmentId) => {
+            window.currentDeliveryShipmentId = shipmentId;
+            document.getElementById('recipientSignName').value = '';
+            document.getElementById('deliveryNotes').value = '';
+            window.clearSignaturePad();
+            window.clearDeliveryPhoto();
+            
+            setTimeout(window.initSignaturePad, 100);
+            window.openModal('deliveryConfirmModal');
+        };
+
+        window.submitDeliveryConfirmation = async () => {
+            const shipmentId = window.currentDeliveryShipmentId;
+            const recipientName = document.getElementById('recipientSignName').value.trim();
+            const notes = document.getElementById('deliveryNotes').value.trim();
+            
+            if (!recipientName) {
+                return window.showToast("Recipient name is required", "error");
+            }
+            
+            // Update shipment with delivery confirmation
+            const shipment = await Adapter.getShipment(shipmentId);
+            if (shipment) {
+                const updatedHistory = [...(shipment.history || [])];
+                updatedHistory.unshift({
+                    time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                    date: new Date().toLocaleDateString(),
+                    location: 'Delivered',
+                    message: `Delivered to ${recipientName}${notes ? ' - ' + notes : ''}`,
+                    active: true,
+                    completed: true
+                });
+                
+                await Adapter.saveShipment(shipmentId, {
+                    status: 'Delivered',
+                    statusColor: 'bg-green-600',
+                    progressBar: '100%',
+                    history: updatedHistory,
+                    deliveryProof: {
+                        recipientName: recipientName,
+                        timestamp: new Date().toISOString(),
+                        notes: notes
+                    }
+                });
+                
+                window.showToast(`Delivery confirmed for ${recipientName}`, "success");
+                window.logActivity(`Delivery confirmed for shipment ${shipmentId}`);
+                window.closeModal('deliveryConfirmModal');
+                window.refreshAdminUI();
+            }
+        };
+
+        // --- MULTI-LANGUAGE SUPPORT ---
+        const TRANSLATIONS = {
+            en: {
+                trackYourShipment: "Track Your Shipment",
+                trackingId: "Tracking ID",
+                track: "Track",
+                status: "Status",
+                delivered: "Delivered",
+                inTransit: "In Transit",
+                pending: "Pending",
+                shipmentManagement: "Shipment Management",
+                newShipment: "New Shipment",
+                createShipment: "Create a Shipment",
+                shipping: "Shipping"
+            },
+            es: {
+                trackYourShipment: "Rastrear su envío",
+                trackingId: "ID de seguimiento",
+                track: "Rastrear",
+                status: "Estado",
+                delivered: "Entregado",
+                inTransit: "En tránsito",
+                pending: "Pendiente",
+                shipmentManagement: "Gestión de envíos",
+                newShipment: "Nuevo envío",
+                createShipment: "Crear un envío",
+                shipping: "Envíos"
+            },
+            fr: {
+                trackYourShipment: "Suivi du colis",
+                trackingId: "ID de suivi",
+                track: "Suivre",
+                status: "Statut",
+                delivered: "Livré",
+                inTransit: "En transit",
+                pending: "En attente",
+                shipmentManagement: "Gestion des expéditions",
+                newShipment: "Nouvelle expédition",
+                createShipment: "Créer une expédition",
+                shipping: "Expédition"
+            },
+            de: {
+                trackYourShipment: "Sendung verfolgen",
+                trackingId: "Sendungsnummer",
+                track: "Verfolgen",
+                status: "Status",
+                delivered: "Zugestellt",
+                inTransit: "Unterwegs",
+                pending: "Ausstehend",
+                shipmentManagement: "Sendungsverwaltung",
+                newShipment: "Neue Sendung",
+                createShipment: "Sendung erstellen",
+                shipping: "Versand"
+            }
+        };
+
+        window.currentLanguage = localStorage.getItem('fedex_language') || 'en';
+
+        window.setLanguage = (lang) => {
+            window.currentLanguage = lang;
+            localStorage.setItem('fedex_language', lang);
+            window.showToast(`Language changed to ${lang.toUpperCase()}`, "success");
+        };
+
+        window.t = (key) => {
+            return TRANSLATIONS[window.currentLanguage]?.[key] || TRANSLATIONS['en']?.[key] || key;
+        };
+        
         window.showToast = (msg, type='info') => {
             const t = document.createElement('div');
             t.className = `${type==='error'?'bg-red-500':'bg-gray-800'} text-white px-6 py-3 rounded shadow-lg mb-2`;
             t.textContent = msg;
             document.getElementById('toast-container').appendChild(t);
             setTimeout(() => t.remove(), 3000);
+        };
+
+         window.duplicateShipment = async (id) => {
+            if (confirm(`Duplicate shipment ${id}?`)) {
+                await Adapter.duplicateShipment(id);
+                 refreshAdminUI();
+                
+            }
+          
         };
         window.switchAdminView = (view) => {
             document.querySelectorAll('.admin-view').forEach(el => el.classList.add('hidden'));
@@ -988,11 +2045,367 @@
             document.getElementById('nav-'+view).classList.add('active', 'bg-fedex-purple', 'text-white');
             refreshAdminUI(); // Render data for that view
         };
+
         window.showServiceModal = (type) => { 
-            const c = { 'shipping': 'Create Label', 'design': 'Upload File', 'locations': 'Search Map' };
-            document.getElementById('serviceModalTitle').textContent = c[type];
+            const modal = document.getElementById('serviceModal');
+            const title = document.getElementById('serviceModalTitle');
+            const content = document.getElementById('serviceModalContent');
+            const footer = modal.querySelector('.bg-gray-50.border-t');
+
+            // Reset footer to default state
+            footer.innerHTML = `
+                <button onclick="closeModal('serviceModal')" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">Close</button>
+                <button id="serviceProceedBtn" onclick="window.simulateAction()" class="px-4 py-2 bg-fedex-purple text-white rounded hover:bg-purple-800 ml-2">Proceed</button>
+            `;
+
+            if (type === 'shipping') {
+                title.textContent = "Create Shipment Label";
+                content.innerHTML = `
+                    <form id="shippingForm" class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <h4 class="font-bold text-gray-700 text-sm mb-2 border-b border-gray-200 pb-1">Sender Details</h4>
+                                <input type="text" id="senderName" placeholder="Sender Name" class="w-full border border-gray-300 p-2 rounded text-sm mb-2 focus:border-fedex-purple outline-none">
+                                <input type="text" id="senderAddr" placeholder="Sender Address" class="w-full border border-gray-300 p-2 rounded text-sm focus:border-fedex-purple outline-none">
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-gray-700 text-sm mb-2 border-b border-gray-200 pb-1">Recipient Details</h4>
+                                <input type="text" id="recipientName" placeholder="Recipient Name" class="w-full border border-gray-300 p-2 rounded text-sm mb-2 focus:border-fedex-purple outline-none">
+                                <input type="text" id="recipientAddr" placeholder="Recipient Address" class="w-full border border-gray-300 p-2 rounded text-sm focus:border-fedex-purple outline-none">
+                                <input type="email" id="customerEmail" placeholder="Customer Email (for notifications)" class="w-full border border-gray-300 p-2 rounded text-sm mt-2 focus:border-fedex-purple outline-none">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 bg-gray-50 p-4 rounded border border-gray-200">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Weight (lbs)</label>
+                                <input type="number" id="pkgWeight" value="1.0" step="0.1" class="w-full border border-gray-300 p-1.5 rounded text-sm focus:border-fedex-purple outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Service</label>
+                                <select id="pkgService" class="w-full border border-gray-300 p-1.5 rounded text-sm focus:border-fedex-purple outline-none">
+                                    <option value="FedEx Ground">FedEx Ground</option>
+                                    <option value="FedEx Express">FedEx Express</option>
+                                    <option value="Standard Overnight">Standard Overnight</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Pieces</label>
+                                <input type="number" id="pkgPieces" value="1" min="1" class="w-full border border-gray-300 p-1.5 rounded text-sm focus:border-fedex-purple outline-none">
+                            </div>
+                        </div>
+                    </form>
+                `;
+                const btn = document.getElementById('serviceProceedBtn');
+                btn.textContent = "Create Label";
+                btn.onclick = window.processShipment;
+            } else if (type === 'design') {
+                title.textContent = "Design & Print";
+                content.innerHTML = `<div class="text-center py-8"><i class="fas fa-cloud-upload-alt text-4xl text-gray-300 mb-4"></i><p class="text-gray-600">Drag and drop files here to print.</p></div>`;
+            } else if (type === 'locations') {
+                title.textContent = "Find Locations";
+                content.innerHTML = `
+                    <div class="space-y-4">
+                        <p class="text-sm text-gray-600">Search for nearby FedEx drop-boxes and centers.</p>
+                        <div class="flex gap-2">
+                            <input type="text" id="mapSearchInput" placeholder="Zip Code or City" class="flex-grow border p-2 rounded focus:border-fedex-purple outline-none">
+                            <button onclick="window.searchMap()" class="bg-fedex-purple text-white px-4 py-2 rounded hover:bg-purple-800">Search</button>
+                        </div>
+                        <div id="map" class="w-full h-64 bg-gray-200 rounded flex items-center justify-center text-gray-500">
+                            Loading Map...
+                        </div>
+                    </div>
+                `;
+                // Initialize map if API is loaded
+                if (window.google && window.google.maps) {
+                    setTimeout(window.initMap, 100);
+                } else {
+                    document.getElementById('map').innerHTML = 'Map API Key required. Check console.';
+                }
+            }
+            
             window.openModal('serviceModal');
         };
+
+        window.processShipment = async () => {
+            const sender = document.getElementById('senderName').value;
+            const recipient = document.getElementById('recipientName').value;
+            const email = document.getElementById('customerEmail').value;
+            
+            if(!sender || !recipient) return window.showToast("Please fill in sender and recipient.", "error");
+
+            // Validate email format if provided
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                return window.showToast("Please enter a valid customer email address.", "error");
+            }
+
+            let trackingId;
+            let isUnique = false;
+            while(!isUnique) {
+                trackingId = Math.floor(100000000000 + Math.random() * 900000000000).toString();
+                const existing = await Adapter.getShipment(trackingId);
+                if(!existing) isUnique = true;
+            }
+            const service = document.getElementById('pkgService').value;
+            const weight = document.getElementById('pkgWeight').value + ' lbs';
+            
+            const newShipment = {
+                status: 'Label Created',
+                statusColor: 'bg-blue-600',
+                progressBar: '5%',
+                service: service,
+                weight: weight,
+                dimensions: '12x10x5 in.',
+                pieces: document.getElementById('pkgPieces').value,
+                deliveryDate: 'Estimated: 3-5 Business Days',
+                history: [{
+                    time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                    date: new Date().toLocaleDateString(),
+                    location: 'Online',
+                    message: 'Shipment information sent to FedEx',
+                    active: true,
+                    completed: false
+                }],
+                sender: { name: sender, addr: document.getElementById('senderAddr').value },
+                recipient: { name: recipient, addr: document.getElementById('recipientAddr').value },
+                customerEmail: email
+            };
+
+            // Save to DB (Firebase or Local)
+            await Adapter.saveShipment(trackingId, newShipment);
+            
+            // Send creation email if address provided
+            if(email) window.sendCreationEmail(trackingId, email, newShipment);
+            
+            // Show Success UI
+            const content = document.getElementById('serviceModalContent');
+            content.innerHTML = `
+                <div class="text-center space-y-4 py-4 animate-fade-in">
+                    <div class="text-green-500 text-6xl mb-4"><i class="fas fa-check-circle"></i></div>
+                    <h3 class="text-2xl font-bold text-gray-800">Shipment Created!</h3>
+                    <div class="bg-gray-100 inline-block px-6 py-3 rounded-lg border border-gray-300">
+                        <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Tracking Number</p>
+                        <p class="text-2xl font-mono font-bold text-fedex-purple tracking-wider">${trackingId}</p>
+                    </div>
+                    <p class="text-sm text-gray-500">Your package is ready to be shipped.</p>
+                    <div class="pt-4 flex justify-center space-x-3">
+                        <button onclick="window.generateLabel('${trackingId}')" class="bg-fedex-purple text-white px-5 py-3 rounded shadow-lg hover:bg-purple-800 font-bold transition transform hover:-translate-y-1">
+                            <i class="fas fa-file-pdf mr-2"></i> Label
+                        </button>
+                        <button onclick="window.generateReceipt('${trackingId}')" class="bg-gray-700 text-white px-5 py-3 rounded shadow-lg hover:bg-gray-600 font-bold transition transform hover:-translate-y-1">
+                            <i class="fas fa-receipt mr-2"></i> Receipt
+                        </button>
+                    </div>
+                </div>
+            `;
+            // Hide default footer buttons
+            document.querySelector('#serviceModal .bg-gray-50.border-t').innerHTML = `<button onclick="closeModal('serviceModal')" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">Close</button>`;
+        };
+
+        window.generateLabel = async (id) => {
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: [101.6, 152.4] }); // 4x6 inch label
+                
+                const data = await Adapter.getShipment(id);
+                if(!data) return window.showToast("Error loading shipment data", "error");
+
+                // --- Label Design ---
+                // Header
+                doc.setFontSize(22);
+                doc.setFont("helvetica", "bold");
+                doc.text("FedEx", 5, 12);
+                
+                doc.setFontSize(14);
+                doc.text(data.service.replace('FedEx ', ''), 96, 12, { align: 'right' });
+
+                // From Section
+                doc.setLineWidth(0.5);
+                doc.line(5, 18, 96, 18);
+                doc.setFontSize(8);
+                doc.text("FROM:", 5, 23);
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(10);
+                doc.text(data.sender?.name || "Sender Name", 5, 28);
+                doc.text(data.sender?.addr || "Sender Address", 5, 33);
+
+                // To Section
+                doc.line(5, 40, 96, 40);
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(9);
+                doc.text("TO:", 5, 45);
+                doc.setFontSize(14);
+                doc.text(data.recipient?.name || "Recipient Name", 10, 52);
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "normal");
+                doc.text(data.recipient?.addr || "Recipient Address", 10, 58);
+
+                // Barcode Section
+                doc.line(5, 70, 96, 70);
+                const canvas = document.createElement("canvas");
+                JsBarcode(canvas, id, { format: "CODE128", displayValue: true, fontSize: 18, height: 50 });
+                const barcodeImg = canvas.toDataURL("image/png");
+                doc.addImage(barcodeImg, 'PNG', 5, 75, 90, 35);
+
+                // Footer Details
+                doc.line(5, 115, 96, 115);
+                doc.setFontSize(8);
+                doc.text(`Weight: ${data.weight}`, 5, 120);
+                doc.text(`Dims: ${data.dimensions}`, 40, 120);
+                doc.text(`Pieces: ${data.pieces}`, 75, 120);
+                doc.text(`Date: ${new Date().toLocaleDateString()}`, 5, 125);
+                
+                // Big Service Letter
+                doc.setFontSize(40);
+                doc.setFont("helvetica", "bold");
+                const letter = data.service.includes('Ground') ? 'G' : (data.service.includes('Express') ? 'E' : 'S');
+                doc.rect(80, 130, 15, 15);
+                doc.text(letter, 87.5, 141, { align: 'center' });
+
+                doc.save(`FedEx_Label_${id}.pdf`);
+                window.showToast("Label downloaded.");
+            } catch (e) {
+                console.error(e);
+                window.showToast("Error generating PDF", "error");
+            }
+        };
+
+        window.generateReceipt = async (id) => {
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                const data = await Adapter.getShipment(id);
+                if(!data) return window.showToast("Error loading data", "error");
+
+                doc.setFontSize(20);
+                doc.text("Shipment Receipt", 105, 20, { align: "center" });
+                
+                doc.setFontSize(12);
+                doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, 40);
+                doc.text(`Tracking ID: ${id}`, 20, 50);
+                
+                doc.setLineWidth(0.5);
+                doc.line(20, 55, 190, 55);
+                
+                doc.text("Sender:", 20, 70);
+                doc.setFont("helvetica", "bold");
+                doc.text(data.sender?.name || "N/A", 20, 80);
+                doc.setFont("helvetica", "normal");
+                doc.text(data.sender?.addr || "N/A", 20, 90);
+                
+                doc.text("Recipient:", 110, 70);
+                doc.setFont("helvetica", "bold");
+                doc.text(data.recipient?.name || "N/A", 110, 80);
+                doc.setFont("helvetica", "normal");
+                doc.text(data.recipient?.addr || "N/A", 110, 90);
+                
+                doc.line(20, 100, 190, 100);
+                
+                doc.text("Shipment Details:", 20, 115);
+                doc.text(`Service: ${data.service}`, 20, 125);
+                doc.text(`Weight: ${data.weight}`, 20, 135);
+                doc.text(`Pieces: ${data.pieces}`, 20, 145);
+                
+                doc.setFontSize(10);
+                doc.text("Thank you for shipping with FedEx.", 105, 180, { align: "center" });
+                
+                doc.save(`Receipt_${id}.pdf`);
+                window.showToast("Receipt downloaded.");
+            } catch (e) {
+                console.error(e);
+                window.showToast("Error generating receipt", "error");
+            }
+        };
+
+        // --- MISSING FUNCTION IMPLEMENTATIONS ---
+        window.toggleQuickActions = () => {
+            const menu = document.getElementById('quickActionsMenu');
+            menu.classList.toggle('hidden');
+        };
+
+        window.toggleNotifications = () => {
+            const menu = document.getElementById('notificationMenu');
+            menu.classList.toggle('hidden');
+        };
+
+        window.clearNotifications = () => {
+            const list = document.getElementById('notificationList');
+            list.innerHTML = '<div class="px-4 py-3 text-sm text-gray-500 italic text-center">No new notifications</div>';
+            const badge = document.getElementById('notificationBadge');
+            badge.classList.add('hidden');
+            window.showToast('Notifications cleared');
+        };
+
+        window.addNotification = (message) => {
+            const list = document.getElementById('notificationList');
+            if (list.querySelector('.text-gray-500.italic')) {
+                list.innerHTML = '';
+            }
+            const item = document.createElement('div');
+            item.className = 'px-4 py-3 text-sm text-gray-800 border-b hover:bg-gray-50 cursor-pointer transition';
+            item.textContent = message;
+            item.onclick = () => item.remove();
+            list.insertBefore(item, list.firstChild);
+            
+            const badge = document.getElementById('notificationBadge');
+            const count = parseInt(badge.textContent) || 0;
+            badge.textContent = count + 1;
+            badge.classList.remove('hidden');
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => { if (item.parentNode) item.remove(); }, 10000);
+        };
+
+        window.updateNotificationBadge = () => {
+            const badge = document.getElementById('notificationBadge');
+            const notifications = document.querySelectorAll('#notificationList > div:not(.text-gray-500)');
+            if (notifications.length === 0) {
+                badge.classList.add('hidden');
+            } else {
+                badge.textContent = notifications.length;
+                badge.classList.remove('hidden');
+            }
+        };
+
+        window.updateMaintenanceUI = () => {
+            const btn = document.getElementById('maintenanceToggleBtn');
+            const dot = document.getElementById('maintenanceToggleDot');
+            if (window.maintenanceMode) {
+                btn.classList.add('bg-red-500');
+                btn.classList.remove('bg-gray-300');
+                dot.classList.add('translate-x-full');
+            } else {
+                btn.classList.remove('bg-red-500');
+                btn.classList.add('bg-gray-300');
+                dot.classList.remove('translate-x-full');
+            }
+        };
+
+        window.toggleMaintenanceMode = () => {
+            window.maintenanceMode = !window.maintenanceMode;
+            window.updateMaintenanceUI();
+            const status = window.maintenanceMode ? 'enabled' : 'disabled';
+            window.showToast(`Maintenance Mode ${status}`, window.maintenanceMode ? 'error' : 'success');
+            window.logActivity(`Maintenance Mode ${status}`);
+        };
+
+        window.deleteLocation = (id) => {
+            if (confirm("Delete location?")) {
+                Adapter.saveLocation = async (data) => { /* stub */ };
+                window.showToast("Location deleted");
+            }
+        };
+
+        // System time display
+        window.updateSystemTime = () => {
+            const timeEl = document.getElementById('systemTime');
+            if (timeEl) {
+                timeEl.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+            }
+        };
+        setInterval(window.updateSystemTime, 1000);
+        window.updateSystemTime(); // Initial call
+
         window.toggleMobileMenu = () => document.getElementById('mobileMenu').classList.toggle('hidden');
         window.scrollToSection = (id) => document.getElementById(id).scrollIntoView({behavior:'smooth'});
         window.simulateAction = () => { window.showToast('Processing...'); setTimeout(() => window.closeModal('serviceModal'), 1000); };
@@ -1008,6 +2421,7 @@
                     document.getElementById('editOriginalId').value = id;
                     document.getElementById('editTrackingId').value = id;
                     document.getElementById('editStatus').value = d.status;
+                    document.getElementById('editStatus').dataset.original = d.status;
                     document.getElementById('editProgress').value = parseInt(d.progressBar);
                     document.getElementById('editService').value = d.service;
                     document.getElementById('editWeight').value = d.weight;
@@ -1015,24 +2429,287 @@
                     document.getElementById('editPieces').value = d.pieces;
                     document.getElementById('editLocation').value = d.history?.[0]?.location || '';
                     document.getElementById('editDate').value = d.deliveryDate;
+                    document.getElementById('editCustomerEmail').value = d.customerEmail || '';
+                    window.currentShipmentHistory = d.history || [];
+                    window.renderEditHistory();
                 }
             } else {
                 title.textContent = "New Shipment";
                 document.getElementById('editOriginalId').value = "";
                 document.getElementById('editTrackingId').value = "";
                 document.getElementById('editStatus').value = "In Transit";
+                document.getElementById('editStatus').dataset.original = "";
                 document.getElementById('editProgress').value = "0";
+                document.getElementById('editCustomerEmail').value = "";
+                window.currentShipmentHistory = [];
+                window.renderEditHistory();
             }
+            document.getElementById('newHistLocation').value = "";
+            document.getElementById('newHistMessage').value = "";
             window.openModal('adminEditModal');
         }
 
+        window.renderEditHistory = () => {
+            const container = document.getElementById('editHistoryList');
+            if (!window.currentShipmentHistory || window.currentShipmentHistory.length === 0) {
+                container.innerHTML = '<div class="p-3 text-gray-400 text-xs text-center italic">No history recorded.</div>';
+                return;
+            }
+            container.innerHTML = window.currentShipmentHistory.map((item, index) => `
+                <div class="flex justify-between items-center p-2 border-b border-gray-200 last:border-0 hover:bg-white transition">
+                    <div class="text-xs">
+                        <div class="font-bold text-gray-700">${item.message}</div>
+                        <div class="text-gray-500">${item.location} &bull; ${item.date} ${item.time}</div>
+                    </div>
+                    <button onclick="window.deleteHistoryItem(${index})" class="text-gray-400 hover:text-red-600 px-2 transition" title="Remove Event">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+            `).join('');
+        };
+
+        window.deleteHistoryItem = (index) => {
+            if(confirm("Remove this tracking event?")) {
+                window.currentShipmentHistory.splice(index, 1);
+                window.renderEditHistory();
+            }
+
+        };
+
         window.openUserModal = () => window.openModal('adminUserModal');
+        window.openEmailModal = () => window.openModal('adminEmailModal');
         window.openLocationModal = () => window.openModal('adminLocationModal');
         window.resetToDefaults = () => { if(confirm("Reset Local Data?")) { localStorage.clear(); location.reload(); } };
 
+        // --- INVOICE GENERATION SYSTEM ---
+        const SHIPMENT_PRICING = {
+            'FedEx Ground': 15.99,
+            'FedEx Express': 35.99,
+            'FedEx Freight': 65.99,
+            'Standard Overnight': 45.99
+        };
+
+        window.openInvoiceModal = () => {
+            const checkboxes = document.querySelectorAll('.shipment-checkbox:checked');
+            if(checkboxes.length === 0) return window.showToast("No shipments selected", "error");
+            
+            const selectedIds = Array.from(checkboxes).map(cb => cb.value);
+            window.selectedInvoiceShipments = selectedIds;
+            
+            // Set default invoice date and number
+            document.getElementById('invoiceDate').valueAsDate = new Date();
+            document.getElementById('invoiceNumber').value = `INV-${Date.now()}`;
+            
+            // Populate shipments list
+            const list = document.getElementById('invoiceShipmentsList');
+            let html = '';
+            let subtotal = 0;
+            
+            selectedIds.forEach(id => {
+                const shipment = (window.adminShipmentData || []).find(s => s.id === id);
+                if (shipment) {
+                    const price = SHIPMENT_PRICING[shipment.service] || 20.00;
+                    subtotal += price;
+                    html += `<div class="flex justify-between items-center p-2 border-b bg-white"><span class="text-sm"><strong>${id}</strong><br><span class="text-xs text-gray-500">${shipment.service}</span></span><span class="font-bold">$${price.toFixed(2)}</span></div>`;
+                }
+            });
+            
+            list.innerHTML = html;
+            document.getElementById('invoiceShipmentsCount').textContent = selectedIds.length;
+            document.getElementById('invoiceSubtotal').textContent = subtotal.toFixed(2);
+            document.getElementById('invoiceTotal').textContent = (subtotal * 1.1).toFixed(2); // 10% tax
+            
+            window.openModal('invoiceModal');
+        };
+
+        window.generateInvoicePDF = async () => {
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                const invoiceDate = document.getElementById('invoiceDate').value;
+                const invoiceNumber = document.getElementById('invoiceNumber').value;
+                const billToName = document.getElementById('billToName').value;
+                const billToEmail = document.getElementById('billToEmail').value;
+                const notes = document.getElementById('invoiceNotes').value;
+                const subtotal = parseFloat(document.getElementById('invoiceSubtotal').textContent);
+                const total = parseFloat(document.getElementById('invoiceTotal').textContent);
+                
+                // Header
+                doc.setFontSize(24);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(77, 20, 140); // FedEx Purple
+                doc.text("INVOICE", 20, 20);
+                
+                // Company Info
+                doc.setFontSize(10);
+                doc.setTextColor(0, 0, 0);
+                doc.text("FedEx Shipping Solutions", 20, 30);
+                doc.text("www.fedex.com", 20, 36);
+                
+                // Invoice Details
+                doc.setFontSize(9);
+                doc.text(`Invoice #: ${invoiceNumber}`, 140, 30);
+                doc.text(`Date: ${new Date(invoiceDate).toLocaleDateString()}`, 140, 36);
+                
+                // Bill To
+                doc.setFont("helvetica", "bold");
+                doc.text("BILL TO:", 20, 50);
+                doc.setFont("helvetica", "normal");
+                doc.text(billToName, 20, 56);
+                doc.text(billToEmail, 20, 62);
+                
+                // Items Table
+                doc.setFontSize(10);
+                doc.setFont("helvetica", "bold");
+                doc.text("Description", 20, 80);
+                doc.text("Qty", 100, 80);
+                doc.text("Unit Price", 130, 80);
+                doc.text("Total", 165, 80, { align: 'right' });
+                
+                doc.setLineWidth(0.5);
+                doc.line(20, 82, 195, 82);
+                
+                // Items
+                doc.setFont("helvetica", "normal");
+                let yPos = 90;
+                const shipments = window.selectedInvoiceShipments || [];
+                shipments.forEach(id => {
+                    const shipment = (window.adminShipmentData || []).find(s => s.id === id);
+                    if (shipment) {
+                        const price = SHIPMENT_PRICING[shipment.service] || 20.00;
+                        doc.setFontSize(9);
+                        doc.text(`Shipment ${id}`, 20, yPos);
+                        doc.text(`${shipment.service}`, 20, yPos + 4);
+                        doc.text("1", 100, yPos);
+                        doc.text(`$${price.toFixed(2)}`, 130, yPos);
+                        doc.text(`$${price.toFixed(2)}`, 165, yPos, { align: 'right' });
+                        yPos += 10;
+                    }
+                });
+                
+                // Totals
+                doc.line(20, yPos, 195, yPos);
+                yPos += 8;
+                
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.text("Subtotal:", 140, yPos);
+                doc.text(`$${subtotal.toFixed(2)}`, 165, yPos, { align: 'right' });
+                
+                yPos += 6;
+                doc.text("Tax (10%):", 140, yPos);
+                const tax = (subtotal * 0.1).toFixed(2);
+                doc.text(`$${tax}`, 165, yPos, { align: 'right' });
+                
+                yPos += 8;
+                doc.setTextColor(77, 20, 140);
+                doc.text("TOTAL:", 140, yPos);
+                doc.text(`$${total.toFixed(2)}`, 165, yPos, { align: 'right' });
+                
+                // Notes
+                if (notes) {
+                    doc.setTextColor(0, 0, 0);
+                    doc.setFontSize(9);
+                    doc.text("Notes:", 20, yPos + 15);
+                    doc.setFontSize(8);
+                    const wrappedNotes = doc.splitTextToSize(notes, 175);
+                    doc.text(wrappedNotes, 20, yPos + 20);
+                }
+                
+                doc.save(`Invoice_${invoiceNumber}.pdf`);
+                window.showToast("Invoice generated successfully", "success");
+                window.closeModal('invoiceModal');
+                window.logActivity(`Generated invoice ${invoiceNumber}`);
+            } catch (e) {
+                console.error(e);
+                window.showToast("Error generating invoice", "error");
+            }
+        };
+
+        // --- ANALYTICS SYSTEM ---
+        window.generateAnalyticsReport = () => {
+            const shipments = window.adminShipmentData || [];
+            if (shipments.length === 0) {
+                window.showToast("No shipments to analyze", "error");
+                return;
+            }
+            
+            const stats = {
+                totalShipments: shipments.length,
+                delivered: shipments.filter(s => s.status === 'Delivered').length,
+                inTransit: shipments.filter(s => s.status === 'In Transit').length,
+                pending: shipments.filter(s => s.status === 'Pending').length,
+                exceptions: shipments.filter(s => s.status === 'Exception').length,
+                totalValue: 0,
+                serviceBreakdown: {},
+                avgDeliveryTime: 0
+            };
+            
+            // Calculate metrics
+            shipments.forEach(s => {
+                const price = SHIPMENT_PRICING[s.service] || 20.00;
+                stats.totalValue += price;
+                stats.serviceBreakdown[s.service] = (stats.serviceBreakdown[s.service] || 0) + 1;
+            });
+            
+            const report = `
+╔════════════════════════════════════════════════════════╗
+║           SHIPMENT ANALYTICS REPORT                    ║
+╚════════════════════════════════════════════════════════╝
+
+📊 SHIPMENT STATISTICS:
+  • Total Shipments: ${stats.totalShipments}
+  • Delivered: ${stats.delivered}
+  • In Transit: ${stats.inTransit}
+  • Pending: ${stats.pending}
+  • Exceptions: ${stats.exceptions}
+
+💰 FINANCIAL METRICS:
+  • Total Revenue: $${stats.totalValue.toFixed(2)}
+  • Average per Shipment: $${(stats.totalValue / stats.totalShipments).toFixed(2)}
+
+📦 SERVICE BREAKDOWN:
+${Object.entries(stats.serviceBreakdown).map(([service, count]) => 
+  `  • ${service}: ${count} shipments (${(count/stats.totalShipments*100).toFixed(1)}%)`).join('\n')}
+
+Generated: ${new Date().toLocaleString()}
+            `;
+            
+            window.showToast("Analytics report generated");
+            // Copy to clipboard
+            const el = document.createElement('textarea');
+            el.value = report;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            
+            console.log(report);
+            alert(report);
+        };
+
+        // Add analytics button to Quick Actions
+        window.setupAnalyticsButton = () => {
+            const quickActionsMenu = document.getElementById('quickActionsMenu');
+            if (quickActionsMenu && !quickActionsMenu.querySelector('[data-analytics]')) {
+                const analyticsItem = document.createElement('a');
+                analyticsItem.href = '#';
+                analyticsItem.setAttribute('data-analytics', 'true');
+                analyticsItem.className = 'block px-4 py-2 text-sm hover:bg-gray-100';
+                analyticsItem.onclick = (e) => { e.preventDefault(); window.generateAnalyticsReport(); window.toggleQuickActions(); };
+                analyticsItem.innerHTML = '<i class="fas fa-chart-bar w-5 text-center text-gray-500"></i> Analytics';
+                quickActionsMenu.appendChild(analyticsItem);
+            }
+        };
+        setTimeout(window.setupAnalyticsButton, 1000);
+
         // Initial Data Load for Local Mode
         refreshAdminUI();
+        window.updateMaintenanceUI();
+        window.updateNotificationBadge();
 
     </script>
 </body>
+
 </html>
