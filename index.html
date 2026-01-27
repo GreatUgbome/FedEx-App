@@ -2068,6 +2068,7 @@
             globalThis.handlePasswordReset = window.handlePasswordReset;
             globalThis.openEditModal = window.openEditModal;
             globalThis.openUserModal = window.openUserModal;
+            globalThis.openLocationModal = window.openLocationModal;
             globalThis.exportToCSV = window.exportToCSV;
             globalThis.showServiceModal = window.showServiceModal;
             globalThis.scrollToSection = window.scrollToSection;
@@ -2081,6 +2082,19 @@
             globalThis.handleVerify = window.handleVerify;
             globalThis.switchAuthTab = window.switchAuthTab;
             globalThis.copyTrackingLink = window.copyTrackingLink;
+            // Admin panel functions
+            globalThis.switchAdminView = window.switchAdminView;
+            globalThis.filterShipments = window.filterShipments;
+            globalThis.renderStatusChart = window.renderStatusChart;
+            globalThis.renderActivityLog = window.renderActivityLog;
+            globalThis.logActivity = window.logActivity;
+            globalThis.deleteShipment = window.deleteShipment;
+            globalThis.deleteAllShipments = window.deleteAllShipments;
+            globalThis.deleteSelectedShipments = window.deleteSelectedShipments;
+            globalThis.saveShipment = window.saveShipment;
+            globalThis.saveUser = window.saveUser;
+            globalThis.saveLocation = window.saveLocation;
+            globalThis.refreshAdminUI = window.refreshAdminUI;
             console.log('✅ All global functions exposed');
         };
         

@@ -124,6 +124,23 @@ class MongoDBAdapter {
         }
     }
 
+    async deleteAllShipments() {
+        try {
+            const allIds = Array.from(this.cache.shipments.keys());
+            if (allIds.length === 0) return;
+            await this.request('POST', '/shipments/bulk/delete', { ids: allIds });
+            allIds.forEach(id => this.cache.shipments.delete(id));
+            this.notifyListeners('shipments', Array.from(this.cache.shipments.values()));
+        } catch (error) {
+            console.error('Failed to delete all shipments:', error);
+            throw error;
+        }
+    }
+
+    async deleteSelectedShipments(trackingIds) {
+        return this.bulkDeleteShipments(trackingIds);
+    }
+
     async bulkDeleteShipments(trackingIds) {
         try {
             await this.request('POST', '/shipments/bulk/delete', { ids: trackingIds });
