@@ -319,6 +319,5 @@ app.listen(PORT, () => {
     console.log(`🏥 Health: http://localhost:${PORT}/api/health`);
     console.log(`🌐 Frontend: http://localhost:${PORT}`);
 });
-});
 
 module.exports = app;
