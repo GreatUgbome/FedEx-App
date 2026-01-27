@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FedEx - Tracking, Shipping, and Locations</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --fedex-purple: #4D148C;
+            --fedex-orange: #FF6200;
+            --fedex-grey: #FAFAFA;
+        }
+        .bg-fedex-purple { background-color: var(--fedex-purple); }
+        .text-fedex-purple { color: var(--fedex-purple); }
+        .bg-fedex-orange { background-color: var(--fedex-orange); }
+        .text-fedex-orange { color: var(--fedex-orange); }
+        .border-fedex-purple { border-color: var(--fedex-purple); }
+        .hover\:bg-fedex-purple:hover { background-color: var(--fedex-purple); }
+        
+        body { font-family: 'Roboto', sans-serif; }
+
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        .slide-down { animation: slideDown 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .timeline-item { position: relative; padding-left: 2rem; padding-bottom: 2rem; border-left: 2px solid #e5e7eb; }
+        .timeline-item:last-child { border-left: none; }
+        .timeline-dot { position: absolute; left: -9px; top: 0; width: 16px; height: 16px; border-radius: 50%; background-color: white; border: 4px solid #e5e7eb; }
+        .timeline-item.active .timeline-dot { border-color: var(--fedex-orange); background-color: var(--fedex-orange); }
+        .timeline-item.completed .timeline-dot { border-color: var(--fedex-purple); background-color: var(--fedex-purple); }
+        .timeline-item.completed { border-left-color: var(--fedex-purple); }
+
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px); }
+        .admin-table th { text-align: left; padding: 12px; background: #f3f4f6; border-bottom: 2px solid #e5e7eb; white-space: nowrap; }
+        .admin-table td { padding: 12px; border-top: 1px solid #e5e7eb; }
+        .admin-table tr:hover { background: #f9fafb; }
+        .sidebar-item.active { background-color: var(--fedex-purple); color: white; border-color: var(--fedex-purple); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-gray-50 flex flex-col min-h-screen relative">
+
+    <div id="toast-container" class="fixed top-24 right-5 z-[70] flex flex-col space-y-2 pointer-events-none"></div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="hidden fixed inset-0 z-[60] modal-overlay flex justify-center items-center px-4">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden slide-down">
+            <div class="bg-fedex-purple p-4 flex justify-between items-center text-white">
+                <h3 class="font-bold text-lg">Log In / Sign Up</h3>
+                <button onclick="closeModal('loginModal')" class="hover:text-gray-300"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6">
+                <form onsubmit="window.handleLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2">User ID / Email</label>
+                        <input type="text" id="loginEmail" class="w-full border border-gray-300 p-2 rounded focus:outline-none focus:border-fedex-purple" placeholder="user@example.com" required>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                        <input type="password" id="loginPassword" class="w-full border border-gray-300 p-2 rounded focus:outline-none focus:border-fedex-purple" placeholder="••••••" required>
+                    </div>
+                    <button type="submit" class="w-full bg-fedex-orange text-white font-bold py-2 rounded hover:bg-orange-600 transition">Log In</button>
+                    <p class="text-xs text-center text-gray-500 mt-4">Demo: Use <strong>Admin</strong> / <strong>Admin123</strong> to manage the database.</p>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Service Modal -->
+    <div id="serviceModal" class="hidden fixed inset-0 z-[60] modal-overlay flex justify-center items-center px-4">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-lg overflow-hidden slide-down">
+            <div class="bg-gray-100 p-4 flex justify-between items-center border-b">
+                <h3 id="serviceModalTitle" class="font-bold text-xl text-fedex-purple">Service</h3>
+                <button onclick="closeModal('serviceModal')" class="text-gray-500 hover:text-gray-800"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div id="serviceModalContent" class="p-6"></div>
+            <div class="bg-gray-50 p-4 border-t text-right">
+                <button onclick="closeModal('serviceModal')" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">Close</button>
+                <button onclick="window.simulateAction()" class="px-4 py-2 bg-fedex-purple text-white rounded hover:bg-purple-800 ml-2">Proceed</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADMIN DASHBOARD MODAL -->
+    <div id="adminPanelModal" class="hidden fixed inset-0 z-[60] modal-overlay flex justify-center items-center px-4">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-6xl h-[90vh] overflow-hidden flex flex-col slide-down">
+            <!-- Header -->
+            <div class="bg-gray-900 p-4 flex justify-between items-center text-white shrink-0">
+                <div class="flex items-center space-x-3">
+                    <span class="bg-fedex-orange text-xs font-bold px-2 py-1 rounded">ADMIN</span>
+                    <h3 class="font-bold text-lg hidden md:block">Control Panel</h3>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-xs text-gray-400" id="systemTime"></span>
+                    <button onclick="closeModal('adminPanelModal')" class="hover:text-gray-300"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+            
+            <!-- Dashboard Content -->
+            <div class="flex-grow flex flex-col md:flex-row overflow-hidden">
+                <!-- Sidebar -->
+                <div class="w-full md:w-64 bg-gray-100 border-b md:border-b-0 md:border-r border-gray-200 p-2 md:p-4 flex flex-row md:flex-col overflow-x-auto md:overflow-y-auto shrink-0 gap-2 md:gap-0">
+                    <div class="hidden md:block text-xs font-bold text-gray-400 uppercase mb-2">Modules</div>
+                    
+                    <div id="nav-shipments" onclick="window.switchAdminView('shipments')" class="sidebar-item active rounded p-2 cursor-pointer font-medium text-gray-700 hover:bg-white transition flex items-center whitespace-nowrap">
+                        <i class="fas fa-box w-6"></i> Shipments
+                    </div>
+                    <div id="nav-users" onclick="window.switchAdminView('users')" class="sidebar-item rounded p-2 cursor-pointer font-medium text-gray-700 hover:bg-white transition flex items-center whitespace-nowrap">
+                        <i class="fas fa-users w-6"></i> Users
+                    </div>
+                    <div id="nav-locations" onclick="window.switchAdminView('locations')" class="sidebar-item rounded p-2 cursor-pointer font-medium text-gray-700 hover:bg-white transition flex items-center whitespace-nowrap">
+                        <i class="fas fa-map-marked-alt w-6"></i> Locations
+                    </div>
+                    
+                    <div class="hidden md:block mt-auto pt-4 border-t border-gray-200">
+                        <div class="text-xs text-gray-500">DB Status: <span id="dbStatus" class="text-yellow-600 font-bold">Checking...</span></div>
+                        <button onclick="window.resetToDefaults()" class="mt-2 text-xs text-red-500 hover:underline">Reset Local Data</button>
+                    </div>
+                </div>
+
+                <!-- Main View Area -->
+                <div class="flex-grow p-4 md:p-6 overflow-y-auto bg-gray-50 relative custom-scrollbar">
+                    
+                    <!-- 1. SHIPMENTS VIEW -->
+                    <div id="adminShipmentsView" class="admin-view">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                            <div>
+                                <h2 class="text-2xl font-bold text-gray-800">Shipment Management</h2>
+                                <p class="text-sm text-gray-500" id="shipmentSubText">Connecting...</p>
+                            </div>
+                            <button onclick="window.openEditModal()" class="bg-fedex-purple text-white px-4 py-2 rounded hover:bg-purple-800 transition shadow w-full md:w-auto">
+                                <i class="fas fa-plus mr-2"></i> New Shipment
+                            </button>
+                        </div>
+                        <div class="bg-white rounded shadow overflow-x-auto border border-gray-200">
+                            <table class="w-full admin-table text-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Tracking ID</th>
+                                        <th>Status</th>
+                                        <th class="hidden sm:table-cell">Service</th>
+                                        <th class="hidden sm:table-cell">Location</th>
+                                        <th class="text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminTableBody">
+                                    <tr><td colspan="5" class="text-center p-4 text-gray-500">No shipments found.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 2. USERS VIEW -->
+                    <div id="adminUsersView" class="admin-view hidden">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                            <div>
+                                <h2 class="text-2xl font-bold text-gray-800">User Management</h2>
+                                <p class="text-sm text-gray-500">Manage customer accounts.</p>
+                            </div>
+                            <button onclick="window.openUserModal()" class="bg-fedex-purple text-white px-4 py-2 rounded hover:bg-purple-800 transition shadow w-full md:w-auto">
+                                <i class="fas fa-user-plus mr-2"></i> Add User
+                            </button>
+                        </div>
+                        <div class="bg-white rounded shadow overflow-x-auto border border-gray-200">
+                            <table class="w-full admin-table text-sm">
+                                <thead>
+                                    <tr>
+                                        <th>User ID</th>
+                                        <th>Full Name</th>
+                                        <th class="hidden sm:table-cell">Email</th>
+                                        <th>Role</th>
+                                        <th class="text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminUsersTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 3. LOCATIONS VIEW -->
+                    <div id="adminLocationsView" class="admin-view hidden">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                            <div>
+                                <h2 class="text-2xl font-bold text-gray-800">Locations Registry</h2>
+                                <p class="text-sm text-gray-500">Manage facilities.</p>
+                            </div>
+                            <button onclick="window.openLocationModal()" class="bg-fedex-purple text-white px-4 py-2 rounded hover:bg-purple-800 transition shadow w-full md:w-auto">
+                                <i class="fas fa-map-pin mr-2"></i> Add Location
+                            </button>
+                        </div>
+                        <div class="bg-white rounded shadow overflow-x-auto border border-gray-200">
+                            <table class="w-full admin-table text-sm">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Name</th>
+                                        <th class="hidden sm:table-cell">Address</th>
+                                        <th>Type</th>
+                                        <th class="text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminLocationsTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALS FOR ADMIN ACTIONS -->
+    <div id="adminEditModal" class="hidden fixed inset-0 z-[65] modal-overlay flex justify-center items-center px-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg overflow-hidden slide-down">
+            <div class="bg-fedex-purple p-3 text-white font-bold flex justify-between">
+                <span id="editModalTitle">Edit Shipment</span>
+                <button onclick="closeModal('adminEditModal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-3 max-h-[80vh] overflow-y-auto custom-scrollbar">
+                <input type="hidden" id="editOriginalId">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tracking ID</label>
+                    <input type="text" id="editTrackingId" class="w-full border p-2 rounded focus:border-fedex-purple outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
+                        <select id="editStatus" class="w-full border p-2 rounded outline-none" onchange="window.updateStatusColorPreview()">
+                            <option value="Delivered">Delivered</option>
+                            <option value="In Transit">In Transit</option>
+                            <option value="Exception">Exception</option>
+                            <option value="Pending">Pending</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Progress (%)</label>
+                        <input type="number" id="editProgress" class="w-full border p-2 rounded outline-none" min="0" max="100">
+                    </div>
+                </div>
+                <div class="p-3 bg-gray-50 rounded border border-gray-200">
+                    <h4 class="text-xs font-bold text-gray-400 uppercase mb-2">Package Details</h4>
+                    <div class="grid grid-cols-2 gap-3 mb-2">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">Service Type</label>
+                            <select id="editService" class="w-full border p-1 rounded text-sm">
+                                <option value="FedEx Ground">FedEx Ground</option>
+                                <option value="FedEx Express">FedEx Express</option>
+                                <option value="FedEx Freight">FedEx Freight</option>
+                                <option value="Standard Overnight">Standard Overnight</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">Weight</label>
+                            <input type="text" id="editWeight" class="w-full border p-1 rounded text-sm" placeholder="e.g. 4.5 lbs">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">Dimensions</label>
+                            <input type="text" id="editDims" class="w-full border p-1 rounded text-sm" placeholder="e.g. 12x10x6 in.">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">Pieces</label>
+                            <input type="number" id="editPieces" class="w-full border p-1 rounded text-sm" min="1">
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Current Location</label>
+                    <input type="text" id="editLocation" class="w-full border p-2 rounded focus:border-fedex-purple outline-none" placeholder="e.g. Memphis, TN">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Delivery Text</label>
+                    <input type="text" id="editDate" class="w-full border p-2 rounded focus:border-fedex-purple outline-none" placeholder="e.g. Estimated: Tomorrow">
+                </div>
+                <div class="flex justify-end space-x-2 pt-4 border-t">
+                    <button onclick="closeModal('adminEditModal')" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+                    <button onclick="window.saveShipment()" class="px-4 py-2 bg-fedex-orange text-white rounded hover:bg-orange-600 font-bold">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. User Modal -->
+    <div id="adminUserModal" class="hidden fixed inset-0 z-[65] modal-overlay flex justify-center items-center px-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden slide-down">
+            <div class="bg-fedex-purple p-3 text-white font-bold flex justify-between">
+                <span id="userModalTitle">Add User</span>
+                <button onclick="closeModal('adminUserModal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="userIdInput">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Full Name</label>
+                    <input type="text" id="userNameInput" class="w-full border p-2 rounded focus:border-fedex-purple">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Email</label>
+                    <input type="email" id="userEmailInput" class="w-full border p-2 rounded focus:border-fedex-purple">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Role</label>
+                    <select id="userRoleInput" class="w-full border p-2 rounded">
+                        <option value="Customer">Customer</option>
+                        <option value="Admin">Admin</option>
+                        <option value="Support">Support Agent</option>
+                    </select>
+                </div>
+                <div class="flex justify-end space-x-2 pt-4 border-t">
+                    <button onclick="closeModal('adminUserModal')" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+                    <button onclick="window.saveUser()" class="px-4 py-2 bg-fedex-orange text-white rounded hover:bg-orange-600 font-bold">Save User</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Location Modal -->
+    <div id="adminLocationModal" class="hidden fixed inset-0 z-[65] modal-overlay flex justify-center items-center px-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden slide-down">
+            <div class="bg-fedex-purple p-3 text-white font-bold flex justify-between">
+                <span id="locModalTitle">Add Location</span>
+                <button onclick="closeModal('adminLocationModal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="locIdInput">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Location Name</label>
+                    <input type="text" id="locNameInput" class="w-full border p-2 rounded focus:border-fedex-purple" placeholder="e.g. North Hub">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Address</label>
+                    <input type="text" id="locAddressInput" class="w-full border p-2 rounded focus:border-fedex-purple" placeholder="e.g. 123 Main St, City, ST">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Type</label>
+                    <select id="locTypeInput" class="w-full border p-2 rounded">
+                        <option value="Distribution Center">Distribution Center</option>
+                        <option value="Retail Store">Retail Store</option>
+                        <option value="Drop Box">Drop Box</option>
+                        <option value="Sort Facility">Sort Facility</option>
+                    </select>
+                </div>
+                <div class="flex justify-end space-x-2 pt-4 border-t">
+                    <button onclick="closeModal('adminLocationModal')" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+                    <button onclick="window.saveLocation()" class="px-4 py-2 bg-fedex-orange text-white rounded hover:bg-orange-600 font-bold">Save Location</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="bg-fedex-purple text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between h-20 items-center">
+                <div class="flex items-center space-x-8">
+                    <!-- Logo -->
+                    <a href="#" onclick="window.location.reload()" class="text-3xl font-bold italic tracking-tighter flex items-center">
+                        <span class="text-white">Fed</span><span class="text-fedex-orange">Ex</span>
+                    </a>
+                    <!-- Desktop Menu -->
+                    <div class="hidden md:flex space-x-6 text-sm font-medium">
+                        <a href="#" onclick="window.showServiceModal('shipping')" class="hover:text-gray-200 transition">Shipping</a>
+                        <a href="#" onclick="window.scrollToSection('tracking-section')" class="hover:text-gray-200 transition">Tracking</a>
+                        <a href="#" onclick="window.showServiceModal('design')" class="hover:text-gray-200 transition">Design & Print</a>
+                        <a href="#" onclick="window.showServiceModal('locations')" class="hover:text-gray-200 transition">Locations</a>
+                        <a href="#" onclick="window.showToast('Support Center coming soon!')" class="hover:text-gray-200 transition">Support</a>
+                    </div>
+                </div>
+                <!-- Right Side Actions -->
+                <div class="flex items-center space-x-4">
+                    <div id="authButtons" class="hidden md:flex items-center space-x-4">
+                        <a href="#" onclick="openModal('loginModal')" class="text-sm font-medium hover:text-gray-200">Sign Up</a>
+                        <a href="#" onclick="openModal('loginModal')" class="text-sm font-medium hover:text-gray-200">Log In</a>
+                    </div>
+                    
+                    <div id="userAccount" class="hidden flex items-center space-x-3">
+                         <div id="adminBadge" class="hidden bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Admin</div>
+                         <div class="flex items-center space-x-2 cursor-pointer" onclick="window.handleLogout()">
+                            <div class="w-8 h-8 rounded-full bg-fedex-orange flex items-center justify-center text-xs font-bold text-white">JD</div>
+                            <span class="text-sm font-medium" id="userNameDisplay">My Account</span>
+                        </div>
+                    </div>
+                    
+                    <button id="adminPanelBtn" onclick="openModal('adminPanelModal')" class="hidden bg-gray-900 text-white text-xs font-bold px-3 py-2 rounded hover:bg-gray-700 transition shadow-md border border-gray-700">
+                        <i class="fas fa-tachometer-alt mr-1"></i> <span class="hidden sm:inline">Dashboard</span>
+                    </button>
+
+                    <button onclick="toggleMobileMenu()" class="p-2 md:hidden hover:bg-purple-800 rounded">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                    <button onclick="window.showToast('Search functionality active')" class="p-2 hover:bg-purple-800 rounded">
+                        <i class="fas fa-search text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="mobileMenu" class="hidden md:hidden bg-white text-gray-800 border-t border-gray-200 shadow-xl absolute w-full left-0 animate-fade-in">
+            <div class="flex flex-col p-4 space-y-4 font-medium">
+                <a href="#" onclick="window.showServiceModal('shipping'); toggleMobileMenu()" class="block px-2 py-1 hover:bg-gray-100 rounded">Shipping</a>
+                <a href="#" onclick="window.scrollToSection('tracking-section'); toggleMobileMenu()" class="block px-2 py-1 hover:bg-gray-100 rounded">Tracking</a>
+                <a href="#" onclick="window.showServiceModal('design'); toggleMobileMenu()" class="block px-2 py-1 hover:bg-gray-100 rounded">Design & Print</a>
+                <a href="#" onclick="window.showServiceModal('locations'); toggleMobileMenu()" class="block px-2 py-1 hover:bg-gray-100 rounded">Locations</a>
+                <hr>
+                <div id="mobileAuthLinks">
+                    <a href="#" onclick="openModal('loginModal'); toggleMobileMenu()" class="block px-2 py-1 text-fedex-purple font-bold">Log In / Sign Up</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="relative bg-fedex-purple h-[500px]" style="background-image: url('https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80'); background-size: cover; background-position: center;">
+        <div class="absolute inset-0 bg-gradient-to-r from-[rgba(77,20,140,0.95)] to-[rgba(77,20,140,0.7)]"></div>
+        <div class="relative max-w-7xl mx-auto px-4 h-full flex flex-col justify-center items-center text-center md:items-start md:text-left pt-10 pb-20">
+            <h1 class="text-4xl md:text-6xl font-bold text-white mb-4 leading-tight drop-shadow-lg">
+                Where now meets next.
+            </h1>
+            <p class="text-xl text-gray-100 mb-8 max-w-xl drop-shadow-md">
+                Fast, reliable shipping and tracking solutions for your business and personal needs.
+            </p>
+            <button onclick="window.showServiceModal('shipping')" class="bg-fedex-orange text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-orange-600 hover:scale-105 transition transform">
+                Create a Shipment
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow -mt-24 relative z-10 px-4 mb-12">
+        <div class="max-w-4xl mx-auto">
+            
+            <!-- Tracking Card -->
+            <div id="tracking-section" class="bg-white rounded-lg shadow-2xl p-6 md:p-8 transform transition hover:shadow-3xl">
+                <h2 class="text-2xl font-light text-gray-800 mb-6 uppercase tracking-wide flex items-center">
+                    <i class="fas fa-box-open mr-3 text-fedex-purple"></i> Track Your Shipment
+                </h2>
+                <div class="flex flex-col md:flex-row gap-4">
+                    <div class="flex-grow relative">
+                        <input type="text" id="trackingInput" 
+                            class="w-full bg-gray-50 border-b-2 border-gray-300 focus:border-fedex-purple outline-none px-4 py-3 text-lg transition-colors peer placeholder-transparent rounded-t-md"
+                            placeholder="Tracking ID">
+                        <label for="trackingInput" 
+                            class="absolute left-4 -top-2.5 text-xs text-gray-500 transition-all peer-placeholder-shown:text-lg peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-fedex-purple">
+                            Tracking ID
+                        </label>
+                    </div>
+                    <button onclick="window.trackPackage()" 
+                        class="bg-fedex-orange hover:bg-orange-600 text-white font-bold py-3 px-8 rounded uppercase transition-all transform active:scale-95 shadow-md flex items-center justify-center min-w-[120px]">
+                        <span id="btnText">Track</span>
+                        <i id="btnSpinner" class="fas fa-circle-notch fa-spin ml-2 hidden"></i>
+                    </button>
+                </div>
+                
+                <p class="mt-4 text-xs text-gray-500">
+                    Try Example IDs: 
+                    <button class="font-mono bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded mx-1 transition" onclick="fillInput('1234567890')">1234567890</button> (Delivered)
+                    <button class="font-mono bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded mx-1 transition" onclick="fillInput('9876543210')">9876543210</button> (In Transit)
+                </p>
+
+                <!-- Results Section -->
+                <div id="resultContainer" class="hidden mt-8 border-t border-gray-200 pt-6 animate-fade-in">
+                    <!-- Header -->
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+                        <div>
+                            <div id="statusBadge" class="inline-block px-3 py-1 rounded-full text-sm font-bold text-white mb-2 shadow-sm">STATUS</div>
+                            <h3 class="text-3xl font-bold text-gray-800" id="mainStatusText">Delivered</h3>
+                            <p class="text-gray-500 mt-1" id="deliveryDate">Monday</p>
+                        </div>
+                        <div class="mt-4 md:mt-0 md:text-right bg-gray-50 p-3 rounded border border-gray-100 w-full md:w-auto">
+                            <p class="text-xs text-gray-500 uppercase tracking-wider">Tracking Number</p>
+                            <p class="text-xl font-mono font-bold text-fedex-purple" id="displayTrackingId">123</p>
+                            <div class="mt-2 text-xs text-blue-600 hover:underline cursor-pointer" onclick="window.copyToClipboard()"><i class="fas fa-copy mr-1"></i> Copy</div>
+                        </div>
+                    </div>
+                    <!-- Progress Bar -->
+                    <div class="w-full bg-gray-200 h-3 rounded-full mb-8 overflow-hidden shadow-inner">
+                        <div id="progressBar" class="bg-green-500 h-full w-0 transition-all duration-1000 ease-out relative"></div>
+                    </div>
+                    <!-- Details Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div class="md:col-span-2">
+                            <h4 class="font-bold text-gray-700 mb-4 border-b pb-2">Travel History</h4>
+                            <div id="timelineContainer" class="ml-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar"></div>
+                        </div>
+                        <div class="bg-gray-50 p-5 rounded-lg border border-gray-200 h-fit shadow-sm">
+                            <h4 class="font-bold text-gray-700 mb-4 flex justify-between items-center">Shipment Facts</h4>
+                            <div class="space-y-3 text-sm">
+                                <div class="flex justify-between border-b border-gray-100 pb-2"><span class="text-gray-500">Service</span><span class="font-medium text-gray-800" id="detailService">FedEx Ground</span></div>
+                                <div class="flex justify-between border-b border-gray-100 pb-2"><span class="text-gray-500">Weight</span><span class="font-medium text-gray-800" id="detailWeight">4.5 lbs</span></div>
+                                <div class="flex justify-between border-b border-gray-100 pb-2"><span class="text-gray-500">Dims</span><span class="font-medium text-gray-800" id="detailDims">12x10x6 in.</span></div>
+                                <div class="flex justify-between border-b border-gray-100 pb-2"><span class="text-gray-500">Pieces</span><span class="font-medium text-gray-800" id="detailPieces">1</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Marketing Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
+                <div onclick="window.showServiceModal('shipping')" class="bg-white p-6 rounded-lg shadow-lg text-center hover:shadow-2xl transition-all cursor-pointer transform hover:-translate-y-1 group border-t-4 border-transparent hover:border-fedex-purple">
+                    <div class="text-fedex-purple text-5xl mb-4 group-hover:scale-110 transition-transform duration-300"><i class="fas fa-shipping-fast"></i></div>
+                    <h3 class="font-bold text-xl mb-2 text-gray-800">Create a Shipment</h3>
+                    <p class="text-sm text-gray-600">Create a shipping label, schedule a pickup, and manage your shipments online.</p>
+                </div>
+                <div onclick="window.showServiceModal('design')" class="bg-white p-6 rounded-lg shadow-lg text-center hover:shadow-2xl transition-all cursor-pointer transform hover:-translate-y-1 group border-t-4 border-transparent hover:border-fedex-purple">
+                    <div class="text-fedex-purple text-5xl mb-4 group-hover:scale-110 transition-transform duration-300"><i class="fas fa-print"></i></div>
+                    <h3 class="font-bold text-xl mb-2 text-gray-800">Printing Services</h3>
+                    <p class="text-sm text-gray-600">Posters, manuals, signs, and more. Upload files and pick up in store today.</p>
+                </div>
+                <div onclick="window.showServiceModal('locations')" class="bg-white p-6 rounded-lg shadow-lg text-center hover:shadow-2xl transition-all cursor-pointer transform hover:-translate-y-1 group border-t-4 border-transparent hover:border-fedex-purple">
+                    <div class="text-fedex-purple text-5xl mb-4 group-hover:scale-110 transition-transform duration-300"><i class="fas fa-map-marker-alt"></i></div>
+                    <h3 class="font-bold text-xl mb-2 text-gray-800">Find Locations</h3>
+                    <p class="text-sm text-gray-600">Find a nearby FedEx location to drop off or pick up your packages reliably.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white mt-auto py-12 border-t-4 border-fedex-orange">
+        <div class="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8 text-sm">
+            <div>
+                <h5 class="font-bold uppercase mb-4 text-gray-400 tracking-wider">Company Information</h5>
+                <ul class="space-y-2 text-gray-300">
+                    <li><a href="#" class="hover:text-white hover:underline">About FedEx</a></li>
+                    <li><a href="#" class="hover:text-white hover:underline">Careers</a></li>
+                </ul>
+            </div>
+            <div>
+                <h5 class="font-bold uppercase mb-4 text-gray-400 tracking-wider">Support</h5>
+                <ul class="space-y-2 text-gray-300">
+                    <li><a href="#" class="hover:text-white hover:underline">Contact Us</a></li>
+                    <li><a href="#" class="hover:text-white hover:underline">Track Package</a></li>
+                </ul>
+            </div>
+            <div>
+                <h5 class="font-bold uppercase mb-4 text-gray-400 tracking-wider">Language</h5>
+                <div class="flex items-center hover:text-gray-200"><i class="fas fa-globe mr-2"></i> United States - English</div>
+            </div>
+            <div>
+                <h5 class="font-bold uppercase mb-4 text-gray-400 tracking-wider">Follow Us</h5>
+                <div class="flex space-x-4 text-2xl">
+                    <a href="#" class="text-gray-400 hover:text-white"><i class="fab fa-facebook"></i></a>
+                    <a href="#" class="text-gray-400 hover:text-white"><i class="fab fa-twitter"></i></a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, query } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // --- FIREBASE CONFIGURATION (UPDATED) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDKJ1lwRWQC3eHyWYbrx3WpdXCrnKT1yGs",
+            authDomain: "fedex-37e89.firebaseapp.com",
+            projectId: "fedex-37e89",
+            storageBucket: "fedex-37e89.firebasestorage.app",
+            messagingSenderId: "404051824308",
+            appId: "1:404051824308:web:13c12e1d7302993648d1e1",
+            measurementId: "G-7PWE0EMDVH"
+        };
+
+        // --- HYBRID MODE SYSTEM ---
+        let db = null;
+        let auth = null;
+        let isFirebaseReady = false;
+
+        // Check if config has been updated from default placeholders
+        const isConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY" && !firebaseConfig.apiKey.includes("YOUR");
+
+        if (isConfigured) {
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                signInAnonymously(auth).then(() => {
+                    console.log("Connected to Firebase");
+                    document.getElementById('dbStatus').textContent = "Cloud Connected";
+                    document.getElementById('dbStatus').classList.remove('text-yellow-600');
+                    document.getElementById('dbStatus').classList.add('text-green-600');
+                    document.getElementById('shipmentSubText').textContent = "Live data from Firebase Cloud.";
+                    isFirebaseReady = true;
+                    setupRealtimeListeners();
+                }).catch((error) => {
+                    console.warn("Firebase Auth Failed:", error.code);
+                    let msg = "Cloud connection failed. Using Offline Mode.";
+                    if (error.code === 'auth/admin-restricted-operation' || error.code === 'auth/operation-not-allowed') {
+                        msg = "Enable 'Anonymous' in Firebase Console > Authentication.";
+                    }
+                    window.showToast(msg, "error");
+                    enableLocalStorageMode();
+                });
+            } catch (e) {
+                console.error("Firebase Init Error:", e);
+                enableLocalStorageMode();
+            }
+        } else {
+            // Immediately fallback if keys aren't set
+            enableLocalStorageMode();
+        }
+
+        function enableLocalStorageMode() {
+            console.log("Falling back to Local Storage");
+            isFirebaseReady = false;
+            document.getElementById('dbStatus').textContent = "Local Mode";
+            document.getElementById('shipmentSubText').textContent = "Local Storage (Demo Mode)";
+            
+            // Show toast on load
+            setTimeout(() => {
+                window.showToast("Local Mode Active. Data saved to browser.", "info");
+            }, 1000);
+        }
+
+        // --- MOCK DATA (For Local Storage) ---
+        const DEFAULT_DB = {
+            '1234567890': {
+                status: 'Delivered', statusColor: 'bg-green-600', deliveryDate: 'Monday, 10/25/2023 at 2:30 PM', progressBar: '100%', service: 'FedEx Ground', weight: '4.5 lbs', dimensions: '12x10x6 in.', pieces: 1,
+                history: [{ time: '2:30 PM', date: 'Oct 25', location: 'Memphis, TN', message: 'Delivered', active: true, completed: false }]
+            },
+            '9876543210': {
+                status: 'In Transit', statusColor: 'bg-fedex-orange', deliveryDate: 'Estimated: Tomorrow', progressBar: '60%', service: 'FedEx Express', weight: '2.1 lbs', dimensions: '10x8x4 in.', pieces: 1,
+                history: [{ time: '4:15 PM', date: 'Today', location: 'Chicago, IL', message: 'In transit', active: true, completed: false }]
+            }
+        };
+        const DEFAULT_USERS = [{ id: 'U001', name: 'Admin', email: 'admin@fedex.com', role: 'Admin' }];
+        const DEFAULT_LOCATIONS = [{ id: 'L001', name: 'Memphis Hub', address: 'Memphis, TN', type: 'Sort Facility' }];
+
+        // Helpers for Local Storage
+        function loadLocal(key, def) { const s = localStorage.getItem(key); return s ? JSON.parse(s) : def; }
+        function saveLocal(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+
+        // --- UNIVERSAL DATA ADAPTER ---
+        // These functions decide whether to use Firebase or LocalStorage
+        
+        const Adapter = {
+            async getShipment(id) {
+                if(isFirebaseReady) {
+                    const snap = await getDoc(doc(db, "shipments", id));
+                    return snap.exists() ? snap.data() : null;
+                } else {
+                    const localDB = loadLocal('fedex_db', DEFAULT_DB);
+                    return localDB[id] || null;
+                }
+            },
+            async saveShipment(id, data) {
+                if(isFirebaseReady) {
+                    await setDoc(doc(db, "shipments", id), data, { merge: true });
+                } else {
+                    const localDB = loadLocal('fedex_db', DEFAULT_DB);
+                    localDB[id] = { ...localDB[id], ...data };
+                    saveLocal('fedex_db', localDB);
+                    refreshAdminUI(); // Manual refresh for local mode
+                }
+            },
+            async deleteShipment(id) {
+                if(isFirebaseReady) {
+                    await deleteDoc(doc(db, "shipments", id));
+                } else {
+                    const localDB = loadLocal('fedex_db', DEFAULT_DB);
+                    delete localDB[id];
+                    saveLocal('fedex_db', localDB);
+                    refreshAdminUI();
+                }
+            },
+            // Users
+            async getUsers() {
+                if(isFirebaseReady) { return []; /* handled by listener */ } 
+                else { return loadLocal('fedex_users', DEFAULT_USERS); }
+            },
+            async saveUser(data) {
+                if(isFirebaseReady) { await setDoc(doc(db, "users", data.id), data); }
+                else {
+                    const users = loadLocal('fedex_users', DEFAULT_USERS);
+                    const idx = users.findIndex(u => u.id === data.id);
+                    if(idx >= 0) users[idx] = data; else users.push(data);
+                    saveLocal('fedex_users', users);
+                    refreshAdminUI();
+                }
+            },
+            async deleteUser(id) {
+                if(isFirebaseReady) { await deleteDoc(doc(db, "users", id)); }
+                else {
+                    const users = loadLocal('fedex_users', DEFAULT_USERS).filter(u => u.id !== id);
+                    saveLocal('fedex_users', users);
+                    refreshAdminUI();
+                }
+            },
+            // Locations
+            async getLocations() {
+                if(isFirebaseReady) { return []; /* handled by listener */ }
+                else { return loadLocal('fedex_locations', DEFAULT_LOCATIONS); }
+            },
+            async saveLocation(data) {
+                if(isFirebaseReady) { await setDoc(doc(db, "locations", data.id), data); }
+                else {
+                    const locs = loadLocal('fedex_locations', DEFAULT_LOCATIONS);
+                    const idx = locs.findIndex(l => l.id === data.id);
+                    if(idx >= 0) locs[idx] = data; else locs.push(data);
+                    saveLocal('fedex_locations', locs);
+                    refreshAdminUI();
+                }
+            }
+        };
+
+        // --- APP LOGIC ---
+
+        window.fillInput = (val) => {
+            document.getElementById('trackingInput').value = val;
+            window.trackPackage();
+        };
+
+        window.copyToClipboard = () => {
+            const text = document.getElementById('displayTrackingId').textContent;
+            const el = document.createElement('textarea');
+            el.value = text;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            window.showToast('Tracking ID copied');
+        };
+
+        window.trackPackage = async () => {
+            const input = document.getElementById('trackingInput').value.trim();
+            const btnText = document.getElementById('btnText');
+            const btnSpinner = document.getElementById('btnSpinner');
+            const resultContainer = document.getElementById('resultContainer');
+            
+            if (!input) {
+                window.showToast("Enter a tracking number.", "error");
+                return;
+            }
+
+            btnText.textContent = "Tracking...";
+            btnSpinner.classList.remove('hidden');
+            resultContainer.classList.add('hidden');
+
+            try {
+                const data = await Adapter.getShipment(input);
+
+                btnText.textContent = "Track";
+                btnSpinner.classList.add('hidden');
+
+                if (data) {
+                    renderResult(data, input);
+                    window.showToast("Tracking found.");
+                    document.getElementById('resultContainer').scrollIntoView({behavior: 'smooth', block: 'start'});
+                } else {
+                    window.showToast("Tracking number not found.", "error");
+                }
+            } catch (e) {
+                console.error(e);
+                btnText.textContent = "Track";
+                btnSpinner.classList.add('hidden');
+                window.showToast("Connection error.", "error");
+            }
+        };
+
+        window.handleLogin = (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const pass = document.getElementById('loginPassword').value;
+
+            if (email === 'Admin' && pass === 'Admin123') {
+                document.getElementById('authButtons').classList.add('hidden');
+                document.getElementById('mobileAuthLinks').classList.add('hidden');
+                document.getElementById('userAccount').classList.remove('hidden');
+                document.getElementById('userAccount').classList.add('flex');
+                document.getElementById('userNameDisplay').textContent = "Admin Console";
+                document.getElementById('adminBadge').classList.remove('hidden');
+                document.getElementById('adminPanelBtn').classList.remove('hidden');
+                
+                window.closeModal('loginModal');
+                window.showToast(`Access Granted: Welcome Admin.`);
+                
+                setTimeout(() => {
+                    window.openModal('adminPanelModal');
+                    window.switchAdminView('shipments');
+                }, 500);
+            } else {
+                window.showToast("Invalid credentials. Try Admin / Admin123", "error");
+            }
+        };
+
+        window.handleLogout = () => {
+            if(confirm('Log out?')) {
+                document.getElementById('authButtons').classList.remove('hidden');
+                document.getElementById('mobileAuthLinks').classList.remove('hidden');
+                document.getElementById('userAccount').classList.add('hidden');
+                document.getElementById('userAccount').classList.remove('flex');
+                document.getElementById('adminPanelBtn').classList.add('hidden');
+                document.getElementById('adminPanelModal').classList.add('hidden');
+                window.showToast("Logged out.");
+            }
+        };
+
+        // --- ADMIN FUNCTIONS ---
+
+        window.saveShipment = async () => {
+            const originalId = document.getElementById('editOriginalId').value;
+            const newId = document.getElementById('editTrackingId').value.trim();
+            if (!newId) return alert("ID required");
+
+            const data = {
+                status: document.getElementById('editStatus').value,
+                progressBar: document.getElementById('editProgress').value + '%',
+                statusColor: getStatusColor(document.getElementById('editStatus').value),
+                service: document.getElementById('editService').value,
+                weight: document.getElementById('editWeight').value,
+                dimensions: document.getElementById('editDims').value,
+                pieces: document.getElementById('editPieces').value,
+                history: [{
+                    time: new Date().toLocaleTimeString(),
+                    date: new Date().toLocaleDateString(),
+                    location: document.getElementById('editLocation').value,
+                    message: "Status updated",
+                    active: true, 
+                    completed: false
+                }],
+                deliveryDate: document.getElementById('editDate').value
+            };
+
+            await Adapter.saveShipment(newId, data);
+            window.closeModal('adminEditModal');
+            window.showToast("Saved.");
+        };
+
+        window.deleteShipment = async (id) => {
+            if(confirm(`Delete ${id}?`)) {
+                await Adapter.deleteShipment(id);
+                window.showToast("Deleted.");
+            }
+        };
+
+        window.saveUser = async () => {
+            const id = document.getElementById('userIdInput').value || 'U'+Date.now();
+            const data = {
+                id: id,
+                name: document.getElementById('userNameInput').value,
+                email: document.getElementById('userEmailInput').value,
+                role: document.getElementById('userRoleInput').value
+            };
+            await Adapter.saveUser(data);
+            window.closeModal('adminUserModal');
+            window.showToast("User saved.");
+        };
+
+        window.deleteUser = async (id) => { if(confirm("Delete user?")) await Adapter.deleteUser(id); };
+
+        window.saveLocation = async () => {
+            const id = document.getElementById('locIdInput').value || 'L'+Date.now();
+            const data = {
+                id: id,
+                name: document.getElementById('locNameInput').value,
+                address: document.getElementById('locAddressInput').value,
+                type: document.getElementById('locTypeInput').value
+            };
+            await Adapter.saveLocation(data);
+            window.closeModal('adminLocationModal');
+            window.showToast("Location saved.");
+        };
+
+        function getStatusColor(status) {
+            if(status === 'Delivered') return 'bg-green-600';
+            if(status === 'Exception') return 'bg-red-600';
+            if(status === 'Pending') return 'bg-blue-600';
+            return 'bg-fedex-orange';
+        }
+
+        // --- UI UPDATES (Hybrid) ---
+        function setupRealtimeListeners() {
+            if(!isFirebaseReady) return;
+            
+            onSnapshot(collection(db, "shipments"), (snap) => {
+                // If in shipment view, re-render
+                if(document.getElementById('adminShipmentsView').classList.contains('hidden') === false) {
+                    const list = [];
+                    snap.forEach(doc => list.push({id: doc.id, ...doc.data()}));
+                    renderShipmentTable(list);
+                }
+            });
+            // Similar listeners can be added for Users/Locations
+        }
+
+        function refreshAdminUI() {
+            // Manually re-read local storage and render active view
+            const view = document.querySelector('.sidebar-item.active').id;
+            if(view === 'nav-shipments') {
+                const dbLocal = loadLocal('fedex_db', DEFAULT_DB);
+                const list = Object.keys(dbLocal).map(k => ({id: k, ...dbLocal[k]}));
+                renderShipmentTable(list);
+            } else if (view === 'nav-users') {
+                renderUserTable(loadLocal('fedex_users', DEFAULT_USERS));
+            } else if (view === 'nav-locations') {
+                renderLocTable(loadLocal('fedex_locations', DEFAULT_LOCATIONS));
+            }
+        }
+
+        function renderShipmentTable(list) {
+            const tbody = document.getElementById('adminTableBody');
+            tbody.innerHTML = '';
+            if(list.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4">No shipments.</td></tr>'; return; }
+            list.forEach(data => {
+                tbody.innerHTML += `<tr>
+                    <td class="font-mono font-bold">${data.id}</td>
+                    <td><span class="px-2 py-1 rounded text-xs text-white ${data.statusColor}">${data.status}</span></td>
+                    <td class="hidden sm:table-cell text-xs">${data.service || '-'}</td>
+                    <td class="hidden sm:table-cell text-xs">${data.history?.[0]?.location || 'N/A'}</td>
+                    <td class="text-right">
+                        <button onclick="window.openEditModal('${data.id}')" class="text-blue-600 mr-2"><i class="fas fa-edit"></i></button>
+                        <button onclick="window.deleteShipment('${data.id}')" class="text-red-600"><i class="fas fa-trash"></i></button>
+                    </td></tr>`;
+            });
+        }
+
+        function renderUserTable(list) {
+            const tbody = document.getElementById('adminUsersTableBody');
+            tbody.innerHTML = '';
+            list.forEach(data => {
+                tbody.innerHTML += `<tr>
+                    <td class="font-mono">${data.id}</td><td class="font-bold">${data.name}</td><td class="hidden sm:table-cell">${data.email}</td>
+                    <td><span class="bg-gray-200 text-xs px-2 py-1 rounded">${data.role}</span></td>
+                    <td class="text-right"><button onclick="window.deleteUser('${data.id}')" class="text-red-600"><i class="fas fa-trash"></i></button></td></tr>`;
+            });
+        }
+
+        function renderLocTable(list) {
+            const tbody = document.getElementById('adminLocationsTableBody');
+            tbody.innerHTML = '';
+            list.forEach(data => {
+                tbody.innerHTML += `<tr>
+                    <td class="font-mono">${data.id}</td><td class="font-bold">${data.name}</td><td class="hidden sm:table-cell">${data.address}</td>
+                    <td>${data.type}</td><td class="text-right"><button onclick="window.deleteLocation()"><i class="fas fa-trash text-red-600"></i></button></td></tr>`;
+            });
+        }
+
+        function renderResult(data, id) {
+            const container = document.getElementById('resultContainer');
+            document.getElementById('statusBadge').className = `inline-block px-3 py-1 rounded-full text-sm font-bold text-white mb-2 shadow-sm ${data.statusColor}`;
+            document.getElementById('statusBadge').textContent = data.status.toUpperCase();
+            document.getElementById('mainStatusText').textContent = data.status;
+            document.getElementById('deliveryDate').textContent = data.deliveryDate;
+            document.getElementById('displayTrackingId').textContent = id;
+            
+            document.getElementById('detailService').textContent = data.service || 'N/A';
+            document.getElementById('detailWeight').textContent = data.weight || 'N/A';
+            document.getElementById('detailDims').textContent = data.dimensions || 'N/A';
+            document.getElementById('detailPieces').textContent = data.pieces || '1';
+            
+            const progress = document.getElementById('progressBar');
+            progress.style.width = '0%';
+            progress.className = `${data.statusColor} h-full transition-all duration-1000 ease-out relative`;
+            setTimeout(() => { progress.style.width = data.progressBar; }, 100);
+
+            const timeline = document.getElementById('timelineContainer');
+            timeline.innerHTML = (data.history || []).map(item => `
+                <div class="timeline-item ${item.active ? 'active' : ''} ${item.completed ? 'completed' : ''}">
+                    <div class="timeline-dot"></div>
+                    <div class="text-sm font-bold text-gray-800">${item.message}</div>
+                    <div class="text-xs text-gray-500">${item.location} - ${item.time}, ${item.date}</div>
+                </div>
+            `).join('');
+            container.classList.remove('hidden');
+        }
+
+        // --- EXPORTS ---
+        window.openModal = (id) => document.getElementById(id).classList.remove('hidden');
+        window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
+        window.showToast = (msg, type='info') => {
+            const t = document.createElement('div');
+            t.className = `${type==='error'?'bg-red-500':'bg-gray-800'} text-white px-6 py-3 rounded shadow-lg mb-2`;
+            t.textContent = msg;
+            document.getElementById('toast-container').appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        };
+        window.switchAdminView = (view) => {
+            document.querySelectorAll('.admin-view').forEach(el => el.classList.add('hidden'));
+            document.getElementById('admin'+view.charAt(0).toUpperCase()+view.slice(1)+'View').classList.remove('hidden');
+            document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active', 'bg-fedex-purple', 'text-white'));
+            document.getElementById('nav-'+view).classList.add('active', 'bg-fedex-purple', 'text-white');
+            refreshAdminUI(); // Render data for that view
+        };
+        window.showServiceModal = (type) => { 
+            const c = { 'shipping': 'Create Label', 'design': 'Upload File', 'locations': 'Search Map' };
+            document.getElementById('serviceModalTitle').textContent = c[type];
+            window.openModal('serviceModal');
+        };
+        window.toggleMobileMenu = () => document.getElementById('mobileMenu').classList.toggle('hidden');
+        window.scrollToSection = (id) => document.getElementById(id).scrollIntoView({behavior:'smooth'});
+        window.simulateAction = () => { window.showToast('Processing...'); setTimeout(() => window.closeModal('serviceModal'), 1000); };
+        window.updateStatusColorPreview = () => {}; 
+        
+        window.openEditModal = async (id=null) => {
+            const title = document.getElementById('editModalTitle');
+            if(id) {
+                title.textContent = "Loading...";
+                const d = await Adapter.getShipment(id);
+                if(d) {
+                    title.textContent = "Edit Shipment";
+                    document.getElementById('editOriginalId').value = id;
+                    document.getElementById('editTrackingId').value = id;
+                    document.getElementById('editStatus').value = d.status;
+                    document.getElementById('editProgress').value = parseInt(d.progressBar);
+                    document.getElementById('editService').value = d.service;
+                    document.getElementById('editWeight').value = d.weight;
+                    document.getElementById('editDims').value = d.dimensions;
+                    document.getElementById('editPieces').value = d.pieces;
+                    document.getElementById('editLocation').value = d.history?.[0]?.location || '';
+                    document.getElementById('editDate').value = d.deliveryDate;
+                }
+            } else {
+                title.textContent = "New Shipment";
+                document.getElementById('editOriginalId').value = "";
+                document.getElementById('editTrackingId').value = "";
+                document.getElementById('editStatus').value = "In Transit";
+                document.getElementById('editProgress').value = "0";
+            }
+            window.openModal('adminEditModal');
+        }
+
+        window.openUserModal = () => window.openModal('adminUserModal');
+        window.openLocationModal = () => window.openModal('adminLocationModal');
+        window.resetToDefaults = () => { if(confirm("Reset Local Data?")) { localStorage.clear(); location.reload(); } };
+
+        // Initial Data Load for Local Mode
+        refreshAdminUI();
+
+    </script>
+</body>
+</html>
