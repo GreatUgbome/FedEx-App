@@ -279,10 +279,10 @@ if (window.location.hostname === 'localhost') {
     apiUrl = 'http://localhost:4000/api';
 } else {
     // Production/Railway deployment:
-    // Frontend: fedex-app-production.up.railway.app
-    // Backend: x5vk3w28.up.railway.app
-    const backendUrl = 'https://x5vk3w28.up.railway.app';
-    apiUrl = `${backendUrl}/api`;
+    // Both frontend and backend on same Railway domain
+    // Frontend: https://fedex-app-production.up.railway.app
+    // Backend: https://fedex-app-production.up.railway.app/api
+    apiUrl = `${apiProtocol}//${window.location.host}/api`;
 }
 
 window.dbAdapter = new MongoDBAdapter(apiUrl);

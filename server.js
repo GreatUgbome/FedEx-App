@@ -6,6 +6,7 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -18,6 +19,9 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
+
+// Serve static files (frontend)
+app.use(express.static(path.join(__dirname)));
 
 // Security headers to prevent XSS, clickjacking, and mixed content
 app.use((req, res, next) => {
@@ -300,6 +304,12 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Internal Server Error' });
 });
 
+// --- SERVE FRONTEND ---
+// Serve index.html for all non-API routes (SPA fallback)
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 // --- START SERVER ---
 
 const PORT = process.env.PORT || 4000;
@@ -307,6 +317,8 @@ app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📡 API: http://localhost:${PORT}/api`);
     console.log(`🏥 Health: http://localhost:${PORT}/api/health`);
+    console.log(`🌐 Frontend: http://localhost:${PORT}`);
+});
 });
 
 module.exports = app;
