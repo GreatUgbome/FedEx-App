@@ -7,9 +7,83 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const app = express();
+
+// --- EMAIL CONFIGURATION ---
+// Using Gmail SMTP with app password (or your email service)
+const transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: process.env.EMAIL_PORT || 587,
+    secure: false, // true for 465, false for other ports
+    auth: {
+        user: process.env.EMAIL_USER || 'your-email@gmail.com',
+        pass: process.env.EMAIL_PASS || 'your-app-password'
+    }
+});
+
+// Verify email connection
+transporter.verify((error, success) => {
+    if (error) {
+        console.log('⚠️  Email service not configured:', error.message);
+    } else {
+        console.log('✅ Email service ready');
+    }
+});
+
+// Function to send verification email
+const sendVerificationEmail = async (email, name, verificationLink) => {
+    const htmlContent = `
+        <html>
+            <body style="font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px;">
+                <div style="background: white; max-width: 600px; margin: 0 auto; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <h1 style="color: #4B0082; margin: 0;">FedEx Tracking</h1>
+                        <p style="color: #666; margin: 5px 0 0 0;">Welcome to our shipping platform</p>
+                    </div>
+                    
+                    <h2 style="color: #333; margin-top: 0;">Hi ${name},</h2>
+                    
+                    <p style="color: #666; line-height: 1.6;">
+                        Thank you for signing up! Please verify your email address by clicking the button below to complete your account setup.
+                    </p>
+                    
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="${verificationLink}" style="display: inline-block; background: #4B0082; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                            Verify Email Address
+                        </a>
+                    </div>
+                    
+                    <p style="color: #666; font-size: 12px; line-height: 1.6;">
+                        Or copy and paste this link in your browser:<br/>
+                        <span style="word-break: break-all; color: #4B0082;">${verificationLink}</span>
+                    </p>
+                    
+                    <p style="color: #999; font-size: 12px; margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
+                        This link will expire in 24 hours.<br/>
+                        If you didn't create this account, please ignore this email.
+                    </p>
+                </div>
+            </body>
+        </html>
+    `;
+
+    try {
+        await transporter.sendMail({
+            from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+            to: email,
+            subject: '✉️ Verify Your FedEx Account',
+            html: htmlContent,
+            text: `Welcome ${name}! Click this link to verify your email: ${verificationLink}`
+        });
+        return true;
+    } catch (error) {
+        console.error('❌ Email send failed:', error.message);
+        return false;
+    }
+};
 
 // Middleware
 app.use(cors({
@@ -29,7 +103,7 @@ app.use((req, res, next) => {
     res.header('X-Frame-Options', 'DENY');
     res.header('X-XSS-Protection', '1; mode=block');
     res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    res.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://maps.googleapis.com https://cdn.jsdelivr.net https://www.gstatic.com https://www.google-analytics.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com; connect-src 'self' http://localhost:4000 https://localhost:4000 https://maps.googleapis.com https://www.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://identitytoolkit.googleapis.com https://www.googleapis.com https://firebaseapp.com https://firebase.googleapis.com https://firestore.googleapis.com https://securetoken.googleapis.com https://cloudflare.com; frame-src 'self' https://maps.googleapis.com");
+    res.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://maps.googleapis.com https://cdn.jsdelivr.net https://www.gstatic.com https://www.google-analytics.com https://apis.google.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com; connect-src 'self' http://localhost:4000 https://localhost:4000 https://*.googleapis.com https://*.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://identitytoolkit.googleapis.com https://www.googleapis.com https://firebaseapp.com https://firebase.googleapis.com https://firestore.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://cloudflare.com wss://*.firebaseio.com; frame-src 'self' https://maps.googleapis.com https://*.firebaseapp.com");
     next();
 });
 
@@ -234,7 +308,7 @@ app.post('/api/auth/register', async (req, res) => {
 
         const existing = await User.findOne({ email });
         if (existing) {
-            return res.status(409).json({ error: 'Email already registered' });
+            return res.status(409).json({ error: 'This email is already registered. Please log in instead.' });
         }
 
         // Generate verification token (64-char random string)
@@ -257,13 +331,18 @@ app.post('/api/auth/register', async (req, res) => {
         const baseUrl = process.env.APP_URL || 'https://fedex-app-production.up.railway.app';
         const verificationLink = `${baseUrl}/verify?token=${verificationToken}`;
 
-        console.log(`📧 Verification link for ${email}: ${verificationLink}`);
-        // TODO: Send email with verification link using EmailJS
-        // For now, log the link for testing
+        // Send verification email
+        const emailSent = await sendVerificationEmail(email, name, verificationLink);
+        
+        if (emailSent) {
+            console.log(`✅ Verification email sent to ${email}`);
+        } else {
+            console.log(`⚠️  Email failed but account created. Demo link: ${verificationLink}`);
+        }
 
         res.json({
             success: true,
-            message: 'Account created. Verification link sent to email.',
+            message: 'Account created. Verification link sent to your email.',
             userId,
             demoLink: verificationLink // For testing purposes
         });
