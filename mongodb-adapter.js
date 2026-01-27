@@ -272,13 +272,20 @@ class MongoDBAdapter {
 
 // Initialize global adapter
 const apiProtocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-const apiHost = window.location.hostname === 'localhost' 
-    ? 'localhost:4000' 
-    : 'http://localhost:4000'; // Always use local backend (comment this line for production)
 
-const apiUrl = window.location.hostname === 'localhost' 
-    ? `${apiProtocol}//localhost:4000/api`
-    : 'http://localhost:4000/api'; // Development fallback
+let apiUrl;
+if (window.location.hostname === 'localhost') {
+    // Local development: use localhost:4000
+    apiUrl = 'http://localhost:4000/api';
+} else {
+    // Production/Railway deployment: extract backend URL from current domain
+    // Railway format: frontend.up.railway.app -> backend-service.up.railway.app/api
+    // Or use direct backend URL if available
+    const backendUrl = window.location.hostname.includes('railway') 
+        ? 'https://fedex-app-backend.up.railway.app'
+        : window.location.origin;
+    apiUrl = `${backendUrl}/api`;
+}
 
 window.dbAdapter = new MongoDBAdapter(apiUrl);
 
