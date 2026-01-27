@@ -315,9 +315,9 @@ app.get('*', (req, res) => {
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📡 API: http://localhost:${PORT}/api`);
-    console.log(`🏥 Health: http://localhost:${PORT}/api/health`);
-    console.log(`🌐 Frontend: http://localhost:${PORT}`);
+    console.log(`📡 API: https://${process.env.RAILWAY_DOMAIN || 'localhost:' + PORT}/api`);
+    console.log(`🏥 Health: https://${process.env.RAILWAY_DOMAIN || 'localhost:' + PORT}/api/health`);
+    console.log(`🌐 Frontend: https://${process.env.RAILWAY_DOMAIN || 'localhost:' + PORT}`);
 });
 
 module.exports = app;
