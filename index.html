@@ -2612,7 +2612,16 @@
         window.toggleMobileMenu = () => document.getElementById('mobileMenu').classList.toggle('hidden');
         window.scrollToSection = (id) => document.getElementById(id).scrollIntoView({behavior:'smooth'});
         window.simulateAction = () => { window.showToast('Processing...'); setTimeout(() => window.closeModal('serviceModal'), 1000); };
-        window.updateStatusColorPreview = () => {}; 
+        
+        window.updateStatusColorPreview = () => {
+            const status = document.getElementById('editStatus').value;
+            const colorClass = getStatusColor(status);
+            const badge = document.getElementById('statusBadge');
+            if(badge) {
+                badge.className = `inline-block px-3 py-1 rounded-full text-sm font-bold text-white mb-2 shadow-sm ${colorClass}`;
+                badge.textContent = status.toUpperCase();
+            }
+        }; 
         
         window.openEditModal = async (id=null) => {
             const title = document.getElementById('editModalTitle');
