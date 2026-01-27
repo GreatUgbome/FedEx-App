@@ -29,7 +29,7 @@ app.use((req, res, next) => {
     res.header('X-Frame-Options', 'DENY');
     res.header('X-XSS-Protection', '1; mode=block');
     res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    res.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://maps.googleapis.com https://cdn.jsdelivr.net https://www.gstatic.com https://www.google-analytics.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com; connect-src 'self' http://localhost:4000 https://localhost:4000 https://maps.googleapis.com https://www.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://identitytoolkit.googleapis.com https://www.googleapis.com https://firebaseapp.com https://firebase.googleapis.com https://firestore.googleapis.com https://cloudflare.com; frame-src 'self' https://maps.googleapis.com");
+    res.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://maps.googleapis.com https://cdn.jsdelivr.net https://www.gstatic.com https://www.google-analytics.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com; connect-src 'self' http://localhost:4000 https://localhost:4000 https://maps.googleapis.com https://www.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://identitytoolkit.googleapis.com https://www.googleapis.com https://firebaseapp.com https://firebase.googleapis.com https://firestore.googleapis.com https://securetoken.googleapis.com https://cloudflare.com; frame-src 'self' https://maps.googleapis.com");
     next();
 });
 
@@ -90,8 +90,8 @@ const userSchema = new mongoose.Schema({
     phone: String,
     role: { type: String, default: 'user' },
     verified: { type: Boolean, default: false },
-    verificationCode: String,
-    verificationCodeExpires: Date,
+    verificationToken: String,
+    verificationTokenExpires: Date,
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -237,8 +237,9 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(409).json({ error: 'Email already registered' });
         }
 
-        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const verificationCodeExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        // Generate verification token (64-char random string)
+        const verificationToken = require('crypto').randomBytes(32).toString('hex');
+        const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
         const userId = 'usr_' + Date.now();
         const user = await User.create({
@@ -248,47 +249,88 @@ app.post('/api/auth/register', async (req, res) => {
             password,
             phone,
             verified: false,
-            verificationCode,
-            verificationCodeExpires
+            verificationToken,
+            verificationTokenExpires
         });
 
-        console.log(`📧 Verification code for ${email}: ${verificationCode}`);
+        // Generate verification link
+        const baseUrl = process.env.APP_URL || 'https://fedex-app-production.up.railway.app';
+        const verificationLink = `${baseUrl}/verify?token=${verificationToken}`;
+
+        console.log(`📧 Verification link for ${email}: ${verificationLink}`);
+        // TODO: Send email with verification link using EmailJS
+        // For now, log the link for testing
 
         res.json({
             success: true,
-            message: 'Account created. Verification code sent to email.',
+            message: 'Account created. Verification link sent to email.',
             userId,
-            demoCode: verificationCode
+            demoLink: verificationLink // For testing purposes
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// Verify email
-app.post('/api/auth/verify', async (req, res) => {
+// Verify email with token (GET endpoint for link click)
+app.get('/api/auth/verify/:token', async (req, res) => {
     try {
-        const { userId, verificationCode } = req.body;
+        const { token } = req.params;
 
-        const user = await User.findOne({ id: userId });
+        const user = await User.findOne({ verificationToken: token });
         if (!user) {
-            return res.status(404).json({ error: 'User not found' });
+            return res.status(404).json({ error: 'Invalid or expired verification link' });
         }
 
-        if (user.verificationCode !== verificationCode) {
-            return res.status(400).json({ error: 'Invalid verification code' });
+        // Check if token has expired
+        if (new Date() > user.verificationTokenExpires) {
+            return res.status(400).json({ error: 'Verification link has expired' });
         }
 
-        if (new Date() > user.verificationCodeExpires) {
-            return res.status(400).json({ error: 'Verification code expired' });
-        }
-
+        // Mark user as verified
         user.verified = true;
-        user.verificationCode = undefined;
-        user.verificationCodeExpires = undefined;
+        user.verificationToken = null;
+        user.verificationTokenExpires = null;
         await user.save();
 
-        res.json({ success: true, message: 'Email verified successfully' });
+        res.json({
+            success: true,
+            message: 'Email verified successfully! You can now log in.',
+            userId: user.id,
+            email: user.email
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Verify email via POST (for form submission)
+app.post('/api/auth/verify', async (req, res) => {
+    try {
+        const { token } = req.body;
+
+        const user = await User.findOne({ verificationToken: token });
+        if (!user) {
+            return res.status(404).json({ error: 'Invalid or expired verification link' });
+        }
+
+        // Check if token has expired
+        if (new Date() > user.verificationTokenExpires) {
+            return res.status(400).json({ error: 'Verification link has expired' });
+        }
+
+        // Mark user as verified
+        user.verified = true;
+        user.verificationToken = null;
+        user.verificationTokenExpires = null;
+        await user.save();
+
+        res.json({
+            success: true,
+            message: 'Email verified successfully! You can now log in.',
+            userId: user.id,
+            email: user.email
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
