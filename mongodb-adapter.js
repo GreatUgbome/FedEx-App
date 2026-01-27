@@ -272,10 +272,15 @@ class MongoDBAdapter {
 
 // Initialize global adapter
 const apiProtocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-const apiHost = window.location.hostname === 'localhost' ? 'localhost:4000' : window.location.host;
-window.dbAdapter = new MongoDBAdapter(
-    `${apiProtocol}//${apiHost}/api`
-);
+const apiHost = window.location.hostname === 'localhost' 
+    ? 'localhost:4000' 
+    : 'http://localhost:4000'; // Always use local backend (comment this line for production)
+
+const apiUrl = window.location.hostname === 'localhost' 
+    ? `${apiProtocol}//localhost:4000/api`
+    : 'http://localhost:4000/api'; // Development fallback
+
+window.dbAdapter = new MongoDBAdapter(apiUrl);
 
 // Auto-start sync
 window.dbAdapter.startAutoSync();
