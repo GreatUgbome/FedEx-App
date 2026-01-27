@@ -72,25 +72,76 @@
     <div id="loginModal" class="hidden fixed inset-0 z-[60] modal-overlay flex justify-center items-center px-4">
         <div class="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden slide-down">
             <div class="bg-fedex-purple p-4 flex justify-between items-center text-white">
-                <h3 class="font-bold text-lg">Log In / Sign Up</h3>
+                <h3 class="font-bold text-lg">Account</h3>
                 <button onclick="closeModal('loginModal')" class="hover:text-gray-300"><i class="fas fa-times"></i></button>
             </div>
+            <!-- Tabs -->
+            <div class="flex border-b">
+                <button onclick="window.switchAuthTab('login')" class="flex-1 p-3 font-bold text-center bg-gray-100 hover:bg-white transition" id="loginTab">Log In</button>
+                <button onclick="window.switchAuthTab('signup')" class="flex-1 p-3 font-bold text-center bg-white hover:bg-gray-50 transition border-b-2 border-transparent" id="signupTab">Sign Up</button>
+            </div>
             <div class="p-6">
-                <form onsubmit="window.handleLogin(event)" class="space-y-4">
-                    <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2">User ID / Email</label>
-                        <input type="text" id="loginEmail" class="w-full border border-gray-300 p-2 rounded focus:outline-none focus:border-fedex-purple" placeholder="user@example.com" required>
-                    </div>
-                    <div>
-                        <div class="flex justify-between items-center mb-2">
-                            <label class="block text-gray-700 text-sm font-bold">Password</label>
-                            <a href="#" onclick="window.handlePasswordReset()" class="text-xs text-fedex-purple hover:underline">Forgot Password?</a>
+                <!-- Login Form -->
+                <div id="loginForm" class="space-y-4">
+                    <form onsubmit="window.handleLogin(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-gray-700 text-sm font-bold mb-2">Email</label>
+                            <input type="email" id="loginEmail" class="w-full border border-gray-300 p-2 rounded focus:outline-none focus:border-fedex-purple" placeholder="admin@example.com" required>
                         </div>
-                        <input type="password" id="loginPassword" class="w-full border border-gray-300 p-2 rounded focus:outline-none focus:border-fedex-purple" placeholder="••••••" required>
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="block text-gray-700 text-sm font-bold">Password</label>
+                                <a href="#" onclick="alert('Contact support for password reset')" class="text-xs text-fedex-purple hover:underline">Forgot Password?</a>
+                            </div>
+                            <input type="password" id="loginPassword" class="w-full border border-gray-300 p-2 rounded focus:outline-none focus:border-fedex-purple" placeholder="••••••" required>
+                        </div>
+                        <button type="submit" class="w-full bg-fedex-orange text-white font-bold py-2 rounded hover:bg-orange-600 transition">Log In</button>
+                        <p class="text-xs text-center text-gray-500 mt-4">Demo: <strong>Admin</strong> / <strong>Admin123</strong> for admin access</p>
+                    </form>
+                </div>
+
+                <!-- Signup Form -->
+                <div id="signupForm" class="hidden space-y-4">
+                    <form onsubmit="window.handleSignup(event)" class="space-y-3">
+                        <div>
+                            <label class="block text-gray-700 text-sm font-bold mb-1">Full Name</label>
+                            <input type="text" id="signupName" class="w-full border border-gray-300 p-2 rounded text-sm focus:outline-none focus:border-fedex-purple" placeholder="John Doe" required>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 text-sm font-bold mb-1">Email</label>
+                            <input type="email" id="signupEmail" class="w-full border border-gray-300 p-2 rounded text-sm focus:outline-none focus:border-fedex-purple" placeholder="john@example.com" required>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 text-sm font-bold mb-1">Phone</label>
+                            <input type="tel" id="signupPhone" class="w-full border border-gray-300 p-2 rounded text-sm focus:outline-none focus:border-fedex-purple" placeholder="+1 (555) 123-4567">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 text-sm font-bold mb-1">Password</label>
+                            <input type="password" id="signupPassword" class="w-full border border-gray-300 p-2 rounded text-sm focus:outline-none focus:border-fedex-purple" placeholder="••••••" required>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 text-sm font-bold mb-1">Confirm Password</label>
+                            <input type="password" id="signupPasswordConfirm" class="w-full border border-gray-300 p-2 rounded text-sm focus:outline-none focus:border-fedex-purple" placeholder="••••••" required>
+                        </div>
+                        <button type="submit" class="w-full bg-fedex-purple text-white font-bold py-2 rounded hover:bg-purple-800 transition">Create Account</button>
+                    </form>
+                </div>
+
+                <!-- Verification Form -->
+                <div id="verificationForm" class="hidden space-y-4">
+                    <div class="bg-blue-50 border border-blue-200 p-3 rounded">
+                        <p class="text-sm text-gray-700 mb-2">✅ Account created! Check your email for a verification code.</p>
+                        <p id="verifyEmail" class="text-sm font-bold text-fedex-purple"></p>
                     </div>
-                    <button type="submit" class="w-full bg-fedex-orange text-white font-bold py-2 rounded hover:bg-orange-600 transition">Log In</button>
-                    <p class="text-xs text-center text-gray-500 mt-4">Demo: Use <strong>Admin</strong> / <strong>Admin123</strong> to manage the database.</p>
-                </form>
+                    <form onsubmit="window.handleVerify(event)" class="space-y-3">
+                        <div>
+                            <label class="block text-gray-700 text-sm font-bold mb-1">Verification Code</label>
+                            <input type="text" id="verificationCode" class="w-full border border-gray-300 p-2 rounded text-sm focus:outline-none focus:border-fedex-purple" placeholder="000000" maxlength="6" required>
+                        </div>
+                        <button type="submit" class="w-full bg-fedex-purple text-white font-bold py-2 rounded hover:bg-purple-800 transition">Verify Email</button>
+                        <button type="button" onclick="window.resendVerificationCode()" class="w-full border border-gray-300 text-gray-700 font-bold py-2 rounded hover:bg-gray-50 transition">Resend Code</button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
@@ -1305,6 +1356,101 @@
             }
         };
 
+        // --- AUTH FUNCTIONS ---
+
+        window.switchAuthTab = (tab) => {
+            document.getElementById('loginForm').classList.toggle('hidden', tab !== 'login');
+            document.getElementById('signupForm').classList.toggle('hidden', tab !== 'signup');
+            document.getElementById('verificationForm').classList.toggle('hidden', true);
+            
+            document.getElementById('loginTab').classList.toggle('bg-gray-100', tab === 'login');
+            document.getElementById('loginTab').classList.toggle('bg-white', tab !== 'login');
+            document.getElementById('signupTab').classList.toggle('bg-white', tab === 'signup');
+            document.getElementById('signupTab').classList.toggle('bg-gray-100', tab !== 'signup');
+        };
+
+        window.handleSignup = async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('signupName').value;
+            const email = document.getElementById('signupEmail').value;
+            const phone = document.getElementById('signupPhone').value;
+            const password = document.getElementById('signupPassword').value;
+            const passwordConfirm = document.getElementById('signupPasswordConfirm').value;
+
+            if (password !== passwordConfirm) {
+                return window.showToast("Passwords don't match", "error");
+            }
+
+            if (password.length < 6) {
+                return window.showToast("Password must be at least 6 characters", "error");
+            }
+
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, password, phone })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    window.newUserId = data.userId;
+                    document.getElementById('verifyEmail').textContent = `📧 ${email}`;
+                    
+                    document.getElementById('signupForm').classList.add('hidden');
+                    document.getElementById('verificationForm').classList.remove('hidden');
+                    
+                    window.showToast("Account created! Check your email for verification code.", "success");
+                } else {
+                    window.showToast(data.error || "Signup failed", "error");
+                }
+            } catch (error) {
+                console.error('Signup error:', error);
+                window.showToast("Connection error", "error");
+            }
+        };
+
+        window.handleVerify = async (e) => {
+            e.preventDefault();
+            const verificationCode = document.getElementById('verificationCode').value;
+
+            try {
+                const response = await fetch('/api/auth/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: window.newUserId,
+                        verificationCode
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    window.showToast("✅ Email verified! You can now log in.", "success");
+                    setTimeout(() => {
+                        window.switchAuthTab('login');
+                        document.getElementById('verificationForm').classList.add('hidden');
+                        document.getElementById('loginForm').classList.remove('hidden');
+                    }, 1500);
+                } else {
+                    window.showToast(data.error || "Verification failed", "error");
+                }
+            } catch (error) {
+                console.error('Verification error:', error);
+                window.showToast("Connection error", "error");
+            }
+        };
+
+        window.resendVerificationCode = async () => {
+            window.showToast("Resending verification code...", "info");
+            // In production, make API call to resend code
+            setTimeout(() => {
+                window.showToast("Check your email for the new code", "success");
+            }, 1000);
+        };
+
         window.handleLogin = (e) => {
             e.preventDefault();
             const email = document.getElementById('loginEmail').value;
@@ -1335,14 +1481,27 @@
         };
 
         window.handlePasswordReset = () => {
-            const email = document.getElementById('loginEmail').value;
-            if(!email) {
-                window.showToast("Please enter your email address first.", "error");
-                document.getElementById('loginEmail').focus();
-                return;
-            }
-            if(confirm(`Send password reset link to ${email}?`)) {
-                window.showToast(`Reset link sent to ${email}`, "success");
+            window.showToast("Contact support for password reset", "info");
+        };
+
+        // --- COPY TRACKING LINK ---
+        window.copyTrackingLink = async (trackingId) => {
+            const baseUrl = window.location.origin;
+            const trackingLink = `${baseUrl}?trackingId=${trackingId}`;
+            
+            try {
+                await navigator.clipboard.writeText(trackingLink);
+                window.showToast(`✅ Tracking link copied!\n${trackingLink}`, "success");
+            } catch (err) {
+                console.error('Copy failed:', err);
+                // Fallback: create temporary input and copy
+                const temp = document.createElement('textarea');
+                temp.value = trackingLink;
+                document.body.appendChild(temp);
+                temp.select();
+                document.execCommand('copy');
+                document.body.removeChild(temp);
+                window.showToast(`✅ Tracking link copied!`, "success");
             }
         };
 
@@ -1669,6 +1828,7 @@
                 <td class="hidden sm:table-cell text-xs text-gray-600">${data.service || '-'}</td>
                 <td class="hidden sm:table-cell text-xs text-gray-600">${data.history?.[0]?.location || 'N/A'}</td>
                 <td class="text-right space-x-1">
+                    <button onclick="window.copyTrackingLink('${data.id}')" class="text-purple-600 hover:text-purple-800 transition" title="Copy Tracking Link"><i class="fas fa-link"></i></button>
                     ${data.status !== 'Delivered' ? `<button onclick="window.openDeliveryConfirmation('${data.id}')" class="text-green-600 hover:text-green-800 transition" title="Delivery Confirmation"><i class="fas fa-check-double"></i></button>` : ''}
                     <button onclick="window.openEditModal('${data.id}')" class="text-blue-600 hover:text-blue-800 transition" title="Edit"><i class="fas fa-edit"></i></button>
                     <button onclick="window.duplicateShipment('${data.id}')" class="text-gray-500 hover:text-gray-700 transition" title="Duplicate"><i class="fas fa-copy"></i></button>

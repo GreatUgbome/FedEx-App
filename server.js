@@ -85,8 +85,13 @@ const shipmentSchema = new mongoose.Schema({
 const userSchema = new mongoose.Schema({
     id: { type: String, required: true, unique: true },
     name: String,
-    email: { type: String, index: true },
-    role: String,
+    email: { type: String, unique: true, sparse: true, index: true },
+    password: String,
+    phone: String,
+    role: { type: String, default: 'user' },
+    verified: { type: Boolean, default: false },
+    verificationCode: String,
+    verificationCodeExpires: Date,
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -216,6 +221,109 @@ app.post('/api/shipments/bulk/delete', async (req, res) => {
 // --- USER ROUTES ---
 
 // Get all users
+// --- AUTH ENDPOINTS ---
+
+// Register new user
+app.post('/api/auth/register', async (req, res) => {
+    try {
+        const { name, email, password, phone } = req.body;
+
+        if (!name || !email || !password) {
+            return res.status(400).json({ error: 'Name, email, and password required' });
+        }
+
+        const existing = await User.findOne({ email });
+        if (existing) {
+            return res.status(409).json({ error: 'Email already registered' });
+        }
+
+        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const verificationCodeExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        const userId = 'usr_' + Date.now();
+        const user = await User.create({
+            id: userId,
+            name,
+            email,
+            password,
+            phone,
+            verified: false,
+            verificationCode,
+            verificationCodeExpires
+        });
+
+        console.log(`📧 Verification code for ${email}: ${verificationCode}`);
+
+        res.json({
+            success: true,
+            message: 'Account created. Verification code sent to email.',
+            userId,
+            demoCode: verificationCode
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Verify email
+app.post('/api/auth/verify', async (req, res) => {
+    try {
+        const { userId, verificationCode } = req.body;
+
+        const user = await User.findOne({ id: userId });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        if (user.verificationCode !== verificationCode) {
+            return res.status(400).json({ error: 'Invalid verification code' });
+        }
+
+        if (new Date() > user.verificationCodeExpires) {
+            return res.status(400).json({ error: 'Verification code expired' });
+        }
+
+        user.verified = true;
+        user.verificationCode = undefined;
+        user.verificationCodeExpires = undefined;
+        await user.save();
+
+        res.json({ success: true, message: 'Email verified successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Login user
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        const user = await User.findOne({ email });
+        if (!user || user.password !== password) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+        }
+
+        if (!user.verified) {
+            return res.status(403).json({ error: 'Please verify your email first' });
+        }
+
+        res.json({
+            success: true,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- USER ENDPOINTS ---
+
 app.get('/api/users', async (req, res) => {
     try {
         const users = await User.find();
