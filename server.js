@@ -11,8 +11,23 @@ require('dotenv').config();
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:3000', 'http://localhost:8080', 'http://localhost', 'https://localhost'],
+    credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
+
+// Security headers to prevent XSS, clickjacking, and mixed content
+app.use((req, res, next) => {
+    res.header('X-Content-Type-Options', 'nosniff');
+    res.header('X-Frame-Options', 'DENY');
+    res.header('X-XSS-Protection', '1; mode=block');
+    res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' http://localhost:4000 https://localhost:4000");
+    next();
+});
 
 // MongoDB Connection
 const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/fedex-app';
