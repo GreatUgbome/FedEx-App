@@ -274,7 +274,7 @@ class MongoDBAdapter {
 const apiProtocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
 const apiHost = window.location.hostname === 'localhost' ? 'localhost:4000' : window.location.host;
 window.dbAdapter = new MongoDBAdapter(
-    process.env.REACT_APP_API_URL || `${apiProtocol}//${apiHost}/api`
+    `${apiProtocol}//${apiHost}/api`
 );
 
 // Auto-start sync
