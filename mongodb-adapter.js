@@ -278,12 +278,8 @@ if (window.location.hostname === 'localhost') {
     // Local development: use localhost:4000
     apiUrl = 'http://localhost:4000/api';
 } else {
-    // Production/Railway deployment: extract backend URL from current domain
-    // Railway format: frontend.up.railway.app -> backend-service.up.railway.app/api
-    // Or use direct backend URL if available
-    const backendUrl = window.location.hostname.includes('railway') 
-        ? 'https://fedex-app-backend.up.railway.app'
-        : window.location.origin;
+    // Production/Railway deployment: use your Railway backend domain
+    const backendUrl = 'https://x5vk3w28.up.railway.app';
     apiUrl = `${backendUrl}/api`;
 }
 
