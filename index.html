@@ -1740,7 +1740,12 @@
 
         window.refreshAdminUI = async function() {
             // Fetch fresh data from MongoDB via Adapter
-            const view = document.querySelector('.sidebar-item.active')?.id;
+            let view = document.querySelector('.sidebar-item.active')?.id;
+            
+            // Default to shipments if no active view
+            if (!view) {
+                view = 'nav-shipments';
+            }
             
             if(view === 'nav-shipments') {
                 try {

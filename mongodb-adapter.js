@@ -307,6 +307,14 @@ window.dbAdapter = new MongoDBAdapter(apiUrl);
 // Auto-start sync
 window.dbAdapter.startAutoSync();
 
+// Initial sync and refresh admin UI
+window.dbAdapter.syncWithServer().then(() => {
+    // After initial sync, refresh the admin UI if it's loaded
+    if (window.refreshAdminUI) {
+        window.refreshAdminUI();
+    }
+});
+
 // Export for use in other files
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = MongoDBAdapter;
