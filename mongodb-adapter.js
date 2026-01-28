@@ -26,7 +26,8 @@ class MongoDBAdapter {
         try {
             const options = {
                 method,
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 8000 // 8 second timeout for requests
             };
 
             if (data) {
@@ -41,7 +42,7 @@ class MongoDBAdapter {
 
             return await response.json();
         } catch (error) {
-            console.error(`API Error [${method} ${endpoint}]:`, error);
+            console.error(`API Error [${method} ${endpoint}]:`, error.message);
             throw error;
         }
     }

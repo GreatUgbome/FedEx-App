@@ -114,10 +114,24 @@ const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/fedex-ap
 mongoose.connect(MONGO_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+    maxPoolSize: 10,
+    minPoolSize: 5,
 }).then(() => {
     console.log('✅ Connected to MongoDB');
 }).catch(err => {
-    console.error('❌ MongoDB Connection Error:', err);
+    console.error('❌ MongoDB Connection Error:', err.message);
+    process.exit(1);
+});
+
+// Connection event listeners
+mongoose.connection.on('disconnected', () => {
+    console.warn('⚠️  MongoDB disconnected');
+});
+
+mongoose.connection.on('error', (err) => {
+    console.error('❌ MongoDB connection error:', err.message);
 });
 
 // --- SCHEMAS ---
@@ -184,26 +198,42 @@ const Shipment = mongoose.model('Shipment', shipmentSchema);
 const User = mongoose.model('User', userSchema);
 const Location = mongoose.model('Location', locationSchema);
 
-// --- SHIPMENT ROUTES ---
+// Middleware to check MongoDB connection
+app.use((req, res, next) => {
+    if (mongoose.connection.readyState === 1) {
+        next();
+    } else if (req.path === '/api/health') {
+        // Allow health check to proceed even if disconnected
+        next();
+    } else {
+        // If not connected, try to quickly return error
+        if (mongoose.connection.readyState === 0) {
+            return res.status(503).json({ error: 'Database connecting...' });
+        }
+        next();
+    }
+});// --- SHIPMENT ROUTES ---
 
 // Get all shipments
 app.get('/api/shipments', async (req, res) => {
     try {
-        const shipments = await Shipment.find().sort({ createdAt: -1 });
+        const shipments = await Shipment.find().sort({ createdAt: -1 }).maxTimeMS(10000);
         res.json(shipments);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Error fetching shipments:', error.message);
+        res.status(500).json({ error: 'Failed to fetch shipments: ' + error.message });
     }
 });
 
 // Get shipment by ID (tracking ID)
 app.get('/api/shipments/:id', async (req, res) => {
     try {
-        const shipment = await Shipment.findOne({ id: req.params.id });
+        const shipment = await Shipment.findOne({ id: req.params.id }).maxTimeMS(10000);
         if (!shipment) return res.status(404).json({ error: 'Shipment not found' });
         res.json(shipment);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Error fetching shipment:', error.message);
+        res.status(500).json({ error: 'Failed to fetch shipment: ' + error.message });
     }
 });
 
