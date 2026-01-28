@@ -80,6 +80,11 @@ class MongoDBAdapter {
         }
     }
 
+    // Alias for getShipmentById to match expected interface
+    async getShipment(trackingId) {
+        return await this.getShipmentById(trackingId);
+    }
+
     async saveShipment(trackingId, shipmentData) {
         try {
             const shipment = await this.request('POST', `/shipments/${trackingId}`, {
