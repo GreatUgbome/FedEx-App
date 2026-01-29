@@ -111,28 +111,55 @@ app.use((req, res, next) => {
 // MongoDB Connection
 const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/fedex-app';
 
-mongoose.connect(MONGO_URI, {
+const mongooseOptions = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 5000,
-    socketTimeoutMS: 45000,
+    serverSelectionTimeoutMS: 10000,
+    socketTimeoutMS: 60000,
     maxPoolSize: 10,
     minPoolSize: 5,
-}).then(() => {
+    retryWrites: true,
+    w: 'majority',
+    connectTimeoutMS: 10000,
+    // Auto-reconnect on disconnect
+    autoIndex: true
+};
+
+mongoose.connect(MONGO_URI, mongooseOptions).then(() => {
     console.log('✅ Connected to MongoDB');
+    console.log(`📊 Database: ${mongoose.connection.db.getName()}`);
 }).catch(err => {
     console.error('❌ MongoDB Connection Error:', err.message);
-    process.exit(1);
+    console.error('Connection String:', MONGO_URI.replace(/:[^:]*@/, ':****@'));
+    // Don't exit - allow server to start and retry
 });
 
 // Connection event listeners
+mongoose.connection.on('connected', () => {
+    console.log('✅ Mongoose connected to MongoDB');
+});
+
 mongoose.connection.on('disconnected', () => {
-    console.warn('⚠️  MongoDB disconnected');
+    console.warn('⚠️  MongoDB disconnected - will attempt to reconnect...');
+});
+
+mongoose.connection.on('reconnected', () => {
+    console.log('🔄 MongoDB reconnected');
 });
 
 mongoose.connection.on('error', (err) => {
     console.error('❌ MongoDB connection error:', err.message);
 });
+
+// Manual reconnect attempt every 10 seconds if disconnected
+setInterval(() => {
+    if (mongoose.connection.readyState === 0) {
+        console.log('🔄 Attempting to reconnect to MongoDB...');
+        mongoose.connect(MONGO_URI, mongooseOptions).catch(err => {
+            console.error('Reconnect failed:', err.message);
+        });
+    }
+}, 10000);
 
 // --- SCHEMAS ---
 
@@ -549,12 +576,57 @@ app.delete('/api/locations/:id', async (req, res) => {
 
 // --- HEALTH CHECK ---
 
-app.get('/api/health', (req, res) => {
-    res.json({
-        status: 'OK',
-        timestamp: new Date(),
-        database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
-    });
+app.get('/api/health', async (req, res) => {
+    try {
+        const dbStatus = mongoose.connection.readyState;
+        const dbStates = {
+            0: 'Disconnected',
+            1: 'Connected',
+            2: 'Connecting',
+            3: 'Disconnecting'
+        };
+        
+        let dbConnectionOk = false;
+        let dbPing = null;
+        
+        // Try a simple ping if connected
+        if (dbStatus === 1) {
+            try {
+                const admin = mongoose.connection.db.admin();
+                const pingResult = await admin.ping();
+                dbConnectionOk = true;
+                dbPing = pingResult;
+            } catch (pingErr) {
+                dbConnectionOk = false;
+                console.warn('Ping failed:', pingErr.message);
+            }
+        }
+        
+        res.json({
+            status: dbConnectionOk ? 'OK' : 'DEGRADED',
+            timestamp: new Date().toISOString(),
+            database: {
+                state: dbStates[dbStatus],
+                ready: dbStatus === 1,
+                connected: dbConnectionOk,
+                ping: dbPing ? 'PONG' : 'FAILED'
+            },
+            uptime: process.uptime(),
+            memory: process.memoryUsage(),
+            node: process.version,
+            env: process.env.NODE_ENV || 'development'
+        });
+    } catch (error) {
+        res.status(503).json({
+            status: 'ERROR',
+            error: error.message,
+            database: {
+                state: 'Unknown',
+                ready: false,
+                connected: false
+            }
+        });
+    }
 });
 
 // --- ERROR HANDLING ---

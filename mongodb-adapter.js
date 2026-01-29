@@ -272,20 +272,49 @@ class MongoDBAdapter {
 
     async syncWithServer() {
         try {
-            await this.getAllShipments();
-            await this.getAllUsers();
-            await this.getAllLocations();
-            console.log('✅ Synced with MongoDB');
-            return true;
+            const results = await Promise.allSettled([
+                this.getAllShipments(),
+                this.getAllUsers(),
+                this.getAllLocations()
+            ]);
+            
+            const succeeded = results.filter(r => r.status === 'fulfilled').length;
+            const failed = results.filter(r => r.status === 'rejected').length;
+            
+            if (succeeded > 0) {
+                console.log(`✅ Synced with MongoDB (${succeeded} success, ${failed} failures)`);
+                return true;
+            } else {
+                console.warn(`⚠️  Sync completely failed - all requests failed`);
+                return false;
+            }
         } catch (error) {
-            console.error('❌ Sync failed:', error);
+            console.error('❌ Sync error:', error.message);
             return false;
         }
     }
 
     startAutoSync() {
-        setInterval(() => this.syncWithServer(), this.syncInterval);
-        console.log(`🔄 Auto-sync enabled (every ${this.syncInterval}ms)`);
+        let syncInterval = this.syncInterval;
+        let failureCount = 0;
+        
+        const sync = async () => {
+            const success = await this.syncWithServer();
+            
+            if (success) {
+                failureCount = 0;
+                syncInterval = this.syncInterval; // Reset to normal interval
+            } else {
+                failureCount++;
+                // Exponential backoff: 5s, 10s, 20s, 40s (max)
+                syncInterval = Math.min(this.syncInterval * Math.pow(2, failureCount - 1), 40000);
+            }
+            
+            setTimeout(sync, syncInterval);
+        };
+        
+        sync();
+        console.log(`🔄 Auto-sync enabled (starting every ${this.syncInterval}ms with exponential backoff)`);
     }
 
     stopAutoSync() {
